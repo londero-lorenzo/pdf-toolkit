@@ -77,6 +77,9 @@ uv run pdf-toolkit redact audit-repo .  --source "D:/originals/2025"   # before 
 
 Exit codes: `0` all OK, `2` something needs review, `1` failure.
 
+Step-by-step guide with every argument and how to read the output:
+[docs/redaction-guide.md](docs/redaction-guide.md). Each command also has `--help`.
+
 ## Development
 
 ```bash
