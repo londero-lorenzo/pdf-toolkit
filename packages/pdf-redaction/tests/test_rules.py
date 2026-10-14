@@ -3,7 +3,7 @@ import re
 import pytest
 
 from pdf_redaction.rules.context import FolderSettings, RedactionContext, context_dir
-from pdf_redaction.rules.java_regex import to_java_patterns
+from pdf_redaction.rules.java_regex import to_java_patterns, to_python, to_stirling_dialect, unsupported_by_stirling
 from pdf_redaction.rules.patterns import available_packs, get_patterns
 from pdf_redaction.rules.terms import load_aliases, load_terms, term_regex, write_terms
 from pdf_redaction.textredact import TextRedactor
@@ -70,10 +70,20 @@ def test_fingerprint_changes_with_rules(source, ctx):
     assert before != after
 
 
-def test_java_patterns_are_valid_python_and_cover_terms(ctx):
+def test_java_patterns_use_the_stirling_dialect_and_cover_terms(ctx):
     patterns = to_java_patterns(ctx)
-    assert patterns[0].startswith("(?iu:")
-    combined = re.compile("|".join(patterns))
-    for value in (PERSON, POLICY, TAX_CODE, EMAIL):
+    assert patterns[0].startswith("(?i:")
+    assert not any(unsupported_by_stirling(p) or "(?P" in p for p in patterns)
+    assert any(r"\x{a0}" in p for p in patterns)
+    combined = re.compile("|".join(to_python(p) for p in patterns))
+    for value in (PERSON, POLICY, TAX_CODE, EMAIL, "Jane Example", "EXAMPLE  JANE"):
         assert combined.search(value)
-    assert not any("(?P" in p for p in patterns)
+
+
+def test_stirling_dialect_rewrites_and_rejects():
+    assert to_stirling_dialect(r"a[\s\u00a0]b") == r"a[\s\x{a0}]b"
+    assert to_stirling_dialect(r"a\\u00a0") == r"a\\u00a0"  # escaped backslash followed by "u00a0"
+    assert to_python(r"a[\s\x{a0}]b") == r"a[\s\u00a0]b"
+    for bad in (r"(?iu:abc)", r"(?u)abc"):
+        with pytest.raises(ValueError):
+            to_stirling_dialect(bad)

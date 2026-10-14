@@ -135,7 +135,10 @@ def _read_key(path: str | None) -> str | None:
 
 class StirlingEngine:
     name = "stirling"
-    version = "1"
+    # bump whenever the requests change, so that already redacted files are redone
+    # 2: patterns rewritten to the dialect Stirling accepts (see rules/java_regex.py)
+    VERSION = "2"
+    version = VERSION
     suffixes = frozenset({".pdf"})
 
     def __init__(self, settings: dict | None = None):
@@ -146,7 +149,7 @@ class StirlingEngine:
         self.do_sanitize = bool(settings.get("sanitize", True))
         self._settings = settings
         self._client: StirlingClient | None = None
-        self.version = f"1/{self.endpoint}{'+sanitize' if self.do_sanitize else ''}"
+        self.version = f"{self.VERSION}/{self.endpoint}{'+sanitize' if self.do_sanitize else ''}"
 
     @property
     def client(self) -> StirlingClient:

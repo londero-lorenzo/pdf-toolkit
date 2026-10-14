@@ -18,6 +18,7 @@ from pdf_core.testing import make_pdf
 from pdf_redaction.engines.base import EngineResult
 from pdf_redaction.engines.text import TextEngine
 from pdf_redaction.rules.context import RedactionContext, context_dir
+from pdf_redaction.rules.java_regex import to_python, unsupported_by_stirling
 from pdf_redaction.rules.terms import write_aliases, write_terms
 from pdf_redaction.textredact import TextRedactor
 
@@ -111,15 +112,20 @@ class FakeStirling(BaseHTTPRequestHandler):
         self._reply(b'{"status":"UP","version":"3.1.0"}', "application/json")
 
     def do_POST(self):
+        fields, files = self._parts()  # read the body first: replying early aborts the upload on Windows
         if self.headers.get("X-API-KEY") != self.api_key:
             return self._reply(b"unauthorized", status=401)
         if FakeStirling.fail_with:
             return self._reply(b"Invalid regex pattern: secret", status=FakeStirling.fail_with)
-        fields, files = self._parts()
         FakeStirling.requests.append({"path": self.path, "fields": fields, "files": files})
         filename, data = files["fileInput"]
         if self.path.endswith("auto-redact"):
-            rules = [re.compile(p) for p in fields["listOfText"][0].split("\n")]
+            # like the real engine: case-insensitive, rules with \u escapes or the u flag silently dropped
+            rules = [
+                re.compile(to_python(p), re.I)
+                for p in fields["listOfText"][0].split("\n")
+                if not unsupported_by_stirling(p)
+            ]
             pages = []
             for page in PdfReader(io.BytesIO(data)).pages:
                 lines = (page.extract_text() or "").splitlines()

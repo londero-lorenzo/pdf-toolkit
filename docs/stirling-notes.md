@@ -33,6 +33,13 @@ pdf-toolkit therefore talks only to the HTTP API of a local server.
   without telling the caller ([L261-280](https://github.com/Stirling-Tools/Stirling-PDF/blob/v3.1.0/app/core/src/main/java/stirling/software/SPDF/controller/api/security/RedactController.java#L261-L280)).
   Text may remain under the boxes. → Every output is verified (`pdf_redaction.verify`) with two
   independent extractors; leftover text means FAIL and the file is never published.
+- **Regex dialect: rules dropped silently.** Measured on 3.1.0 with `auto-redact`: a pattern that
+  contains a `\uXXXX` escape or the `u` inline flag (`(?u)`, `(?iu:...)`) is ignored without any
+  error, while the other patterns of the same request still apply. `(?i:...)`, look-arounds,
+  `\x{hh}` and Latin-1 ranges such as `À-ÿ` work; matching is case-insensitive even without flags.
+  → `rules/java_regex.py` rewrites `\uXXXX` as `\x{hh}`, uses `(?i:...)` only and refuses any
+  pattern that would still be dropped; the test double of Stirling drops such rules the same way.
+  Re-test this list when upgrading.
 - **File names in logs.** `auto-redact` logs the uploaded file name at INFO
   ([L251-254](https://github.com/Stirling-Tools/Stirling-PDF/blob/v3.1.0/app/core/src/main/java/stirling/software/SPDF/controller/api/security/RedactController.java#L251-L254)).
   → The client always uploads the file as `document.pdf`; the compose template sets the log level to WARN.
@@ -51,4 +58,15 @@ pdf-toolkit therefore talks only to the HTTP API of a local server.
 
 1. Check the new tag on Docker Hub and read the release notes for redaction, logging, metering.
 2. Re-read `RedactController`, `RedactExecuteService`, `AccountLinkProperties` at the new tag.
-3. Run `pdf-toolkit redact stirling-status`, then a session on synthetic documents and verify.
+   Re-check the regex dialect (see "Regex dialect" above) on a synthetic PDF.
+3. Back up the folder that holds Stirling's `configs/` (users, API keys, settings): newer versions
+   migrate its database and you cannot go back without the copy.
+4. Change the tag in your compose file and run `docker compose up -d` from its folder: compose
+   recreates the container on the new image and keeps `configs/`, so the API key stays valid.
+   Keep the old image until the checks below pass (`docker images`), then `docker rmi` it.
+5. Run `pdf-toolkit redact stirling-status` (it prints the version), then a session on synthetic
+   documents (`scripts/make_demo_folder.py`) and check that it ends OK.
+6. Re-run real sessions with `redact run SESSION --force`: the engine settings did not change, so
+   without `--force` already redacted files would be kept as they are.
+
+Rollback: stop the container, restore the `configs/` backup, put the old tag back, `docker compose up -d`.
