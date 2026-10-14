@@ -1,0 +1,19 @@
+[project]
+name = "pdf-redaction"
+version = "0.1.0"
+description = "Folder-level redaction for PDFs, text/CSV files and file names, with verification"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["pdf-core"]
+
+[project.entry-points."pdf_toolkit.redaction_engines"]
+stirling = "pdf_redaction.engines.stirling:StirlingEngine"
+text = "pdf_redaction.engines.text:TextEngine"
+
+[tool.uv.sources]
+pdf-core = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8,<0.13"]
+build-backend = "uv_build"

@@ -1,0 +1,26 @@
+# Local Stirling-PDF used by pdf-toolkit as its PDF redaction engine.
+#
+# Copy this file to a PRIVATE folder (its bind mounts will hold Stirling's settings, users and
+# logs) and start it from there:   docker compose up -d      UI: http://127.0.0.1:8080
+#
+# Hardening (see docs/stirling-notes.md):
+# - port published on 127.0.0.1 only: not reachable from other devices;
+# - analytics off, usage metering towards stirling.com off; never press "Connect" in Settings;
+# - Stirling logs at WARN: at INFO it logs file names, at DEBUG redaction patterns;
+# - no pipeline / watched-folder volumes: since 3.1.0 they keep copies of the originals.
+services:
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:3.1.0-fat   # pinned tag, never "latest"
+    container_name: stirling-pdf
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SECURITY_ENABLELOGIN: "true"          # required for API keys (X-API-KEY)
+      SYSTEM_ENABLEANALYTICS: "false"
+      STIRLING_BILLING_ACCOUNTLINK_METERING_ENABLED: "false"
+      LOGGING_LEVEL_STIRLING_SOFTWARE: "WARN"
+      LANGS: "en_GB"
+    volumes:
+      - ./configs:/configs
+      - ./logs:/logs
+    restart: "no"

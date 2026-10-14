@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Never commit documents or redaction data: tests generate their own synthetic files
+*.pdf
+*.csv
+*.tsv
+*.docx
+*.xlsx
+.redaction/
+config.toml
+*api_key*
+*.key
+workspaces/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+.env

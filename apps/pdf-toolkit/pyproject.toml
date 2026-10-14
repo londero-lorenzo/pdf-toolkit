@@ -1,0 +1,25 @@
+[project]
+name = "pdf-toolkit"
+version = "0.1.0"
+description = "Modular desktop/CLI PDF toolkit. First module: folder redaction"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["pdf-core", "pdf-redaction"]
+
+[project.scripts]
+pdf-toolkit = "pdf_toolkit.cli:main"
+
+[project.gui-scripts]
+pdf-toolkit-gui = "pdf_toolkit.gui.shell:main"
+
+[project.entry-points."pdf_toolkit.modules"]
+redaction = "pdf_toolkit.redaction_module:MODULE"
+
+[tool.uv.sources]
+pdf-core = { workspace = true }
+pdf-redaction = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8,<0.13"]
+build-backend = "uv_build"
