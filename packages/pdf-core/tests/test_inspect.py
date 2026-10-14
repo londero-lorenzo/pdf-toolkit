@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from pdf_core import available_backends, extract_text, inspect_pdf
@@ -23,6 +25,13 @@ def test_pages_text_and_images(sample, backend):
     assert "Jane Example" in report.metadata_text
     assert report.has_text
     assert not report.encrypted
+
+
+@pytest.mark.parametrize("backend", available_backends())
+def test_backends_can_be_used_from_several_threads(sample, backend):
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        reports = list(pool.map(lambda _: inspect_pdf(sample, backend), range(40)))
+    assert all(r.image_pages == [2] for r in reports)
 
 
 def test_text_chunks_cover_metadata(sample):

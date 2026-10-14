@@ -2,18 +2,28 @@
 
 It covers page text, images, annotation counts, document info and attachments. XMP and form
 values are left to the pypdf backend.
+
+PDFium is not thread-safe: every call into it goes through ``_LOCK``, so callers may use this
+backend from several threads (the redaction pipeline verifies files in parallel).
 """
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 from pdf_core.inspect import PageInfo, PdfReport
 
 _TECHNICAL_INFO_KEYS = {"CreationDate", "ModDate", "Trapped"}
+_LOCK = threading.RLock()
 
 
 def inspect(path: Path) -> PdfReport:
+    with _LOCK:
+        return _inspect(path)
+
+
+def _inspect(path: Path) -> PdfReport:
     import pypdfium2 as pdfium
     import pypdfium2.raw as pdfium_c
 
