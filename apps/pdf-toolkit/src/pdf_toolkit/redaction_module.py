@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import argparse
+from pathlib import Path, PurePosixPath
 
 from pdf_redaction.audit import audit_repo
 from pdf_redaction.engines.stirling import StirlingEngine
 from pdf_redaction.rules.context import ALIASES_FILENAME, TERMS_FILENAME, context_dir
 from pdf_redaction.rules.terms import write_aliases, write_terms
-from pdf_redaction.verify import Status
+from pdf_redaction.verify import Status, Strength, scan_path
 from pdf_toolkit import redaction_service as svc
 from pdf_toolkit.config import AppConfig
 from pdf_toolkit.modules import ToolkitModule
@@ -82,21 +83,24 @@ def _verify(args, cfg: AppConfig) -> int:
 
 def _review(args, cfg: AppConfig) -> int:
     session = svc.open_session(cfg, args.session)
+    paths = [p.replace("\\", "/") for p in args.paths]  # accept Windows separators
     known = {v.rel_path: v for v in svc.verify(cfg, session)}
-    unknown = [p for p in args.paths if p not in known]
+    unknown = [p for p in paths if p not in known]
     if unknown:
         print(f"{len(unknown)} path(s) not found among the redacted files (use the paths printed by 'run')")
         return 1
-    session.set_reviewed(args.paths, not args.undo)
-    print(f"{len(args.paths)} file(s) {'un' if args.undo else ''}marked as reviewed")
+    session.set_reviewed(paths, not args.undo)
+    print(f"{len(paths)} file(s) {'un' if args.undo else ''}marked as reviewed")
     return 0
 
 
 def _publish(args, cfg: AppConfig) -> int:
     session = svc.open_session(cfg, args.session)
     report = svc.publish_session(cfg, session, Path(args.output) if args.output else None)
-    for rel, reason in report.blocked:
-        print(f"HOLD {rel}: {reason}")
+    ctx = svc.load_context(cfg, session.source)
+    for index, (rel, reason) in enumerate(report.blocked, 1):
+        leaks = any(f.strength is Strength.STRONG for f in scan_path(PurePosixPath(rel), ctx))
+        print(f"HOLD {f'file#{index}' if leaks else rel}: {reason}")
     print(f"{len(report.published)} published, {len(report.blocked)} held back, {report.removed_stale} stale removed")
     return 0 if not report.blocked else 2
 
@@ -119,13 +123,96 @@ def _stirling_status(args, cfg: AppConfig) -> int:
     return 0
 
 
+SESSION_ARG = "session alias given to 'new', or the workspace folder"
+
+GUIDE = "Full guide: docs/redaction-guide.md"
+
+NEW_HELP = f"""Create a session: copy SOURCE into a private workspace. Nothing is redacted yet.
+
+Run it once per source folder; later changes in SOURCE are picked up by 'run'.
+The workspace is <workspace_root>/<ALIAS> unless --workspace is given; it holds the
+unredacted copy, so it must not be inside SOURCE, output_root or a protected location.
+
+examples:
+  pdf-toolkit redact new "D:/originals/2025" invoices-2025
+  pdf-toolkit redact new "D:/originals/2025" invoices-2025 --workspace "E:/private/ws"
+
+{GUIDE}"""
+
+RUN_HELP = f"""Redact and verify every file of a session, then print one line per file.
+
+Steps: copy changes from SOURCE -> load the context (global lists + SOURCE/.redaction/)
+-> redact names -> redact contents (.pdf via Stirling-PDF; .csv .tsv .txt .md built in;
+other types are skipped and never published) -> verify each output.
+Incremental: files whose original, rules and engine settings did not change are only verified.
+
+output lines:
+  OK   <redacted path>                    nothing found
+  WARN <path>: images on p1               a person must look at it, then 'redact review'
+  FAIL <path>: p2: term folder#2 x1       still matches line 2 of .redaction/terms.txt
+  SKIP / ERR                              not processed / engine error (never published)
+  file#N replaces a path that still matches a rule. Matched text is never printed.
+
+exit codes: 0 all OK, 2 some WARN, 1 any FAIL or error
+
+examples:
+  pdf-toolkit redact run invoices-2025
+  pdf-toolkit redact run "E:/private/ws" --force
+
+{GUIDE}"""
+
+REVIEW_HELP = f"""Record that you looked at WARN files yourself and they are safe to publish.
+
+WARN means the checks cannot decide alone: pages with images or scans, weak hits such
+as long numbers, annotations, forms, attachments. Open the file in the workspace
+(redacted/<path>), check it, then mark it. 'publish' copies a WARN file only if marked.
+The mark is bound to the file's content: if a later 'run' produces a different file,
+it is not reviewed any more. 'run' and 'verify' show "(reviewed)" next to marked files.
+
+PATH is the redacted path exactly as printed by 'run' (quote it if it has spaces).
+exit codes: 0 marked, 1 a path is not among the redacted files
+
+examples:
+  pdf-toolkit redact review invoices-2025 "ABCDEPOL-A.pdf" "scans/receipt 03.pdf"
+  pdf-toolkit redact review invoices-2025 "ABCDEPOL-A.pdf" --undo
+
+{GUIDE}"""
+
+PUBLISH_HELP = f"""Copy the files that are safe to share to <output_root>/<ALIAS>/.
+
+Nothing is redacted here: run 'run' first. Each file is verified again with the current
+rules and copied only if OK, or WARN and reviewed. Held back: FAIL, WARN not reviewed,
+files redacted with older rules, skipped types, errors. Next to each PDF a text extract
+is written to _text/<path>.txt. Run it again whenever you like: the output folder is
+brought in line with the session, and files this session published earlier that no
+longer qualify are removed.
+
+output lines:
+  HOLD <path>: WARN: mark it as reviewed first
+  3 published, 1 held back, 0 stale removed
+exit codes: 0 everything published, 2 something held back
+
+examples:
+  pdf-toolkit redact publish invoices-2025
+  pdf-toolkit redact publish invoices-2025 --output "E:/to-share"
+
+{GUIDE}"""
+
+
 def add_cli(subparsers) -> None:
-    p = subparsers.add_parser("redact", help="redact whole folders (PDF, text/CSV, file names)")
+    raw = argparse.RawDescriptionHelpFormatter
+    p = subparsers.add_parser("redact", help="redact whole folders (PDF, text/CSV, file names)", epilog=GUIDE)
     sub = p.add_subparsers(dest="action", required=True)
 
-    s = sub.add_parser("new", help="create a session: copy SOURCE into a private workspace")
-    s.add_argument("source")
-    s.add_argument("alias", help="public name of the session (letters, digits, . _ -)")
+    s = sub.add_parser(
+        "new", help="create a session: copy SOURCE into a private workspace", description=NEW_HELP, formatter_class=raw
+    )
+    s.add_argument("source", help="folder of originals (only read; sub-folders included, .redaction/ excluded)")
+    s.add_argument(
+        "alias",
+        help="public session name, 1-64 letters, digits, . _ - (e.g. invoices-2025). It names the workspace "
+        "and the published folder, so it must not contain personal data",
+    )
     s.add_argument("--workspace", help="workspace folder (default: <workspace_root>/<alias>)")
     s.set_defaults(handler=_new)
 
@@ -135,27 +222,35 @@ def add_cli(subparsers) -> None:
     s.set_defaults(handler=_context)
 
     s = sub.add_parser("preview-names", help="write the original -> redacted name mapping (private CSV)")
-    s.add_argument("session", help="alias or workspace path")
+    s.add_argument("session", help=SESSION_ARG)
     s.set_defaults(handler=_preview)
 
-    s = sub.add_parser("run", help="redact and verify every file of the session")
-    s.add_argument("session")
-    s.add_argument("--force", action="store_true", help="redo files even if nothing changed")
+    s = sub.add_parser(
+        "run", help="redact and verify every file of the session", description=RUN_HELP, formatter_class=raw
+    )
+    s.add_argument("session", help=SESSION_ARG)
+    s.add_argument(
+        "--force",
+        action="store_true",
+        help="redo every file even if nothing changed (e.g. after upgrading Stirling-PDF)",
+    )
     s.set_defaults(handler=_run)
 
     s = sub.add_parser("verify", help="verify the redacted files again")
-    s.add_argument("session")
+    s.add_argument("session", help=SESSION_ARG)
     s.set_defaults(handler=_verify)
 
-    s = sub.add_parser("review", help="mark WARN files as visually reviewed")
-    s.add_argument("session")
-    s.add_argument("paths", nargs="+", help="redacted paths as printed by 'run'")
-    s.add_argument("--undo", action="store_true")
+    s = sub.add_parser("review", help="mark WARN files as checked by you", description=REVIEW_HELP, formatter_class=raw)
+    s.add_argument("session", help=SESSION_ARG)
+    s.add_argument("paths", nargs="+", metavar="PATH", help="redacted path as printed by 'run' (one or more)")
+    s.add_argument("--undo", action="store_true", help="remove the mark")
     s.set_defaults(handler=_review)
 
-    s = sub.add_parser("publish", help="copy verified files to the output folder")
-    s.add_argument("session")
-    s.add_argument("--output", help="output root (default: redaction.output_root)")
+    s = sub.add_parser(
+        "publish", help="copy verified files to the output folder", description=PUBLISH_HELP, formatter_class=raw
+    )
+    s.add_argument("session", help=SESSION_ARG)
+    s.add_argument("--output", help="output root, the session goes in <output>/<alias>/ (default: output_root)")
     s.set_defaults(handler=_publish)
 
     s = sub.add_parser("audit-repo", help="check files a git repository would publish")

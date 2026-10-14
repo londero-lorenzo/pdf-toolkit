@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pdf_redaction.engines.base import Engine, load_engines
 from pdf_redaction.guards import GuardError, ensure_not_within
+from pdf_redaction.names import NameRedactor
 from pdf_redaction.pipeline import RunReport, plan_names, run_session, verify_session
 from pdf_redaction.publish import PublishReport, publish
 from pdf_redaction.rules.context import RedactionContext
@@ -44,6 +45,9 @@ def workspace_for(cfg: AppConfig, alias: str) -> Path:
 
 
 def create_session(cfg: AppConfig, source: Path, alias: str, workspace: Path | None = None) -> Session:
+    # the alias becomes a public folder name (<output_root>/<alias>): it must not leak anything itself
+    if NameRedactor(load_context(cfg, source)).findings(alias):
+        raise GuardError("alias matches a redaction rule (term, alias, PII or long code): choose a neutral one")
     return Session.create(source, workspace or workspace_for(cfg, alias), alias, protected(cfg))
 
 

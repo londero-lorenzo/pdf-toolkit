@@ -2,6 +2,10 @@
 
 import hashlib
 
+import pytest
+
+from pdf_redaction.rules.context import context_dir
+from pdf_redaction.rules.terms import write_terms
 from pdf_toolkit.cli import main
 from redaction_fixtures import EMAIL, PERSON, POLICY, TAX_CODE
 
@@ -34,6 +38,7 @@ def test_full_cycle_prints_nothing_private(tmp_path, config, source, capsys):
     assert cli(config, "redact", "run", "sample-2025") == 2  # one WARN (image), no FAIL
     assert cli(config, "redact", "verify", "sample-2025") == 2
     assert cli(config, "redact", "publish", "sample-2025") == 2  # WARN file held back
+    assert cli(config, "redact", "review", "sample-2025", "missing.pdf") == 1
     assert cli(config, "redact", "review", "sample-2025", "ABCDEPOL-A.pdf") == 0
     assert cli(config, "redact", "publish", "sample-2025") == 0
     out = capsys.readouterr()
@@ -71,3 +76,28 @@ def test_audit_repo_command(tmp_path, config, source, capsys):
     out = capsys.readouterr().out
     assert "FAIL" in out
     assert_clean(out)
+
+
+def test_alias_matching_a_rule_is_refused(config, source, capsys):
+    for alias in ("Jane-Example-2025", f"pol{POLICY}", "jane.example@example.org"):
+        assert cli(config, "redact", "new", str(source), alias) == 1
+    err = capsys.readouterr().err
+    assert err.count("alias matches a redaction rule") == 3
+    assert_clean(err)
+
+
+def test_help_of_the_main_steps(capsys):
+    for cmd in ("new", "run", "review", "publish"):
+        with pytest.raises(SystemExit):
+            main(["redact", cmd, "--help"])
+        assert "docs/redaction-guide.md" in capsys.readouterr().out
+
+
+def test_publish_hides_paths_that_match_new_rules(config, source, capsys):
+    assert cli(config, "redact", "new", str(source), "sample-2025") == 0
+    cli(config, "redact", "run", "sample-2025")
+    write_terms(context_dir(source) / "terms.txt", [PERSON, "movements"])
+    capsys.readouterr()
+    assert cli(config, "redact", "publish", "sample-2025") == 2  # rules changed: everything held back
+    out = capsys.readouterr().out
+    assert "HOLD file#" in out and "movements" not in out
