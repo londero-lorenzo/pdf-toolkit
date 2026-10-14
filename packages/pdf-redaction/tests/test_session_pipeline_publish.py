@@ -103,6 +103,19 @@ def test_publish_rules(tmp_path, session, ctx, engines):
             assert PERSON not in p.read_text(encoding="utf-8", errors="ignore")
 
 
+def test_review_is_lost_when_the_file_changes(session, ctx, engines):
+    run_session(session, ctx, engines)
+    session.set_reviewed(["ABCDEPOL-A.pdf"])
+    assert session.reviewed() == {"ABCDEPOL-A.pdf"}
+    run_session(session, ctx, engines, force=True)  # same content: the review still holds
+    assert session.reviewed() == {"ABCDEPOL-A.pdf"}
+    with open(session.redacted_dir / "ABCDEPOL-A.pdf", "ab") as fh:
+        fh.write(b"%changed")
+    assert session.reviewed() == set()
+    session.set_reviewed(["ABCDEPOL-A.pdf"], False)
+    assert json.loads(session.review_path.read_text(encoding="utf-8")) == {}
+
+
 def test_publish_blocks_fail_and_stale_context(tmp_path, session, source, ctx):
     run_session(session, ctx, {"leaky": LeakyEngine(), "text": TextEngine()})
     report = publish(session, ctx, tmp_path / "shared")
@@ -111,6 +124,15 @@ def test_publish_blocks_fail_and_stale_context(tmp_path, session, source, ctx):
     ctx2 = RedactionContext.load(source, default_packs=["common", "it"])
     report = publish(session, ctx2, tmp_path / "shared")
     assert all("rules changed" in reason for _, reason in report.blocked)
+
+
+def test_publish_blocks_files_whose_source_changed(tmp_path, session, source, ctx, engines):
+    run_session(session, ctx, engines)
+    with open(source / "movements.csv", "a", encoding="utf-8") as fh:
+        fh.write("2025-03-31;someone;300,00\n")
+    session.sync_originals()  # the next run starts like this; suppose it then fails on this file
+    report = publish(session, ctx, tmp_path / "shared")
+    assert dict(report.blocked)["movements.csv"] == "source changed since it was redacted: run again"
 
 
 def test_publish_refuses_output_inside_workspace(session, ctx, engines):

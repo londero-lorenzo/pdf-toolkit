@@ -1,9 +1,9 @@
 """Copy verified files from a session to an output folder.
 
 A file is published when, verified again right now with the current context, it is OK, or WARN
-and marked as reviewed. FAIL files, files processed with an older context and unsupported files
-are never published. For PDFs a plain-text extract is written to ``_text/<path>.txt`` and
-verified as well.
+and marked as reviewed. FAIL files, files processed with an older context or from an older version
+of the original, and unsupported files are never published. For PDFs a plain-text extract is
+written to ``_text/<path>.txt`` and verified as well.
 
 Output layout: ``<output root>/<alias>/...`` plus ``.published.json``, the list of files this
 session wrote, so a later publish can remove its own stale files and nothing else.
@@ -44,6 +44,7 @@ def publish(session: Session, ctx: RedactionContext, output_root: Path, *, text_
     ledger = Ledger(session.ledger_path)
     fingerprint = ctx.fingerprint()
     reviewed = session.reviewed()
+    manifest = session.manifest()
     written: list[str] = []
 
     for entry in sorted(ledger.entries.values(), key=lambda e: e.redacted):
@@ -51,6 +52,9 @@ def publish(session: Session, ctx: RedactionContext, output_root: Path, *, text_
         src = session.redacted_dir / rel
         if entry.result != "done" or not src.exists():
             report.blocked.append((rel, "not redacted yet"))
+            continue
+        if manifest.get(entry.original, {}).get("sha256") != entry.original_sha256:
+            report.blocked.append((rel, "source changed since it was redacted: run again"))
             continue
         if entry.context_fingerprint != fingerprint:
             report.blocked.append((rel, "rules changed since it was redacted: run again"))

@@ -8,7 +8,7 @@ Workspace layout::
       originals/        byte-for-byte copy of the source (the ``.redaction`` folder excluded)
       redacted/         engine output, with redacted names
       ledger.csv        what was processed, with which context and engine
-      review.json       redacted paths a human has reviewed
+      review.json       redacted paths a human has reviewed, with the SHA-256 of what was seen
       logs/
 
 The workspace contains unredacted data: it must live in a private location, never inside a
@@ -149,12 +149,26 @@ class Session:
         path = self.workspace / MANIFEST_FILE
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
-    def reviewed(self) -> set[str]:
+    def _review_marks(self) -> dict[str, str]:
         if not self.review_path.exists():
-            return set()
-        return set(json.loads(self.review_path.read_text(encoding="utf-8")))
+            return {}
+        marks = json.loads(self.review_path.read_text(encoding="utf-8"))
+        return marks if isinstance(marks, dict) else {}  # older format without hashes: review again
+
+    def reviewed(self) -> set[str]:
+        """Paths marked as reviewed whose redacted file is still the one that was looked at."""
+        out = set()
+        for rel, digest in self._review_marks().items():
+            path = self.redacted_dir / rel
+            if path.is_file() and sha256_file(path) == digest:
+                out.add(rel)
+        return out
 
     def set_reviewed(self, rel_paths: list[str], value: bool = True) -> None:
-        current = self.reviewed()
-        current = current | set(rel_paths) if value else current - set(rel_paths)
-        self.review_path.write_text(json.dumps(sorted(current), indent=1), encoding="utf-8")
+        marks = self._review_marks()
+        for rel in rel_paths:
+            if value:
+                marks[rel] = sha256_file(self.redacted_dir / rel)
+            else:
+                marks.pop(rel, None)
+        self.review_path.write_text(json.dumps(dict(sorted(marks.items())), indent=1), encoding="utf-8")
