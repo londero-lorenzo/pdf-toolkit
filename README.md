@@ -42,7 +42,7 @@ More modules (PDF to Markdown, translation) will plug into the same shell throug
 Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), Docker (for PDFs).
 
 ```bash
-git clone https://github.com/<owner>/pdf-toolkit && cd pdf-toolkit
+git clone https://github.com/londero-lorenzo/pdf-toolkit && cd pdf-toolkit
 uv sync
 
 # 1. local PDF engine (copy docker/stirling/docker-compose.yml to a private folder first)
