@@ -5,7 +5,18 @@ import pytest
 from pdf_redaction.rules.context import FolderSettings, RedactionContext, context_dir
 from pdf_redaction.rules.java_regex import to_java_patterns, to_python, to_stirling_dialect, unsupported_by_stirling
 from pdf_redaction.rules.patterns import available_packs, get_patterns
-from pdf_redaction.rules.terms import load_aliases, load_terms, term_regex, write_terms
+from pdf_redaction.rules.terms import (
+    TERMS_HEADER,
+    load_aliases,
+    load_terms,
+    parse_aliases_text,
+    read_aliases_text,
+    read_terms_text,
+    term_regex,
+    write_aliases,
+    write_terms,
+    write_terms_text,
+)
 from pdf_redaction.textredact import TextRedactor
 from redaction_fixtures import EMAIL, PERSON, POLICY, TAX_CODE
 
@@ -52,6 +63,50 @@ def test_load_terms_and_aliases(tmp_path):
     assert [t.label for t in terms] == ["global#2", "global#5"]
     (tmp_path / "a.csv").write_text("real;alias\n123456789;POL-B\n", encoding="utf-8")
     assert [(a.real, a.alias) for a in load_aliases(tmp_path / "a.csv", "x")] == [("123456789", "POL-B")]
+
+
+def test_terms_text_round_trip_keeps_comments_and_blank_lines(tmp_path):
+    text = f"# Clients\n{PERSON}\n\n# Contracts\n{POLICY}\n{PERSON.lower()}"
+    write_terms_text(tmp_path / "t.txt", text + "\n\n")
+    assert read_terms_text(tmp_path / "t.txt") == text
+    assert [(t.value, t.label) for t in load_terms(tmp_path / "t.txt", "folder")] == [
+        (PERSON, "folder#2"),
+        (POLICY, "folder#5"),
+    ]
+
+
+def test_empty_terms_text_writes_the_header(tmp_path):
+    write_terms_text(tmp_path / "t.txt", "\n \n")
+    assert read_terms_text(tmp_path / "t.txt") == TERMS_HEADER
+    assert load_terms(tmp_path / "t.txt", "folder") == []
+
+
+def test_aliases_text_round_trip_keeps_comments_and_blank_lines(tmp_path):
+    text = f"# Clients\n\n{PERSON} ; Client A\n# Contracts; misc; notes\n{POLICY} ; POL-A"
+    write_aliases(tmp_path / "a.csv", parse_aliases_text(text + "\n\n"))
+    assert read_aliases_text(tmp_path / "a.csv") == text
+    assert [(a.real, a.alias, a.label) for a in load_aliases(tmp_path / "a.csv", "folder-alias")] == [
+        (PERSON, "Client A", "folder-alias#4"),
+        (POLICY, "POL-A", "folder-alias#6"),
+    ]
+
+
+def test_alias_comments_do_not_change_the_delimiter(tmp_path):
+    (tmp_path / "a.csv").write_text("# a; b; c; d\nreal,alias\n123456789,POL-B\n", encoding="utf-8")
+    assert [(a.real, a.alias) for a in load_aliases(tmp_path / "a.csv", "x")] == [("123456789", "POL-B")]
+    assert read_aliases_text(tmp_path / "a.csv") == "# a; b; c; d\n123456789 ; POL-B"
+
+
+def test_aliases_header_after_comments_is_not_an_alias(tmp_path):
+    (tmp_path / "a.csv").write_text("# note\n\nreal;alias\n123456789;POL-B\n", encoding="utf-8")
+    assert [(a.real, a.label) for a in load_aliases(tmp_path / "a.csv", "x")] == [("123456789", "x#4")]
+
+
+def test_malformed_alias_line_names_only_the_line_number():
+    with pytest.raises(ValueError) as err:
+        parse_aliases_text(f"# ok\n{PERSON} ; Client A\n{POLICY} POL-A")
+    assert str(err.value).startswith("Line 3:")
+    assert POLICY not in str(err.value)
 
 
 def test_context_merges_global_and_folder(tmp_path, source):

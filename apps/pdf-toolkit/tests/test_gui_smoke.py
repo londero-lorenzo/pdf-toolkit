@@ -6,6 +6,7 @@ import pytest
 
 from pdf_toolkit import redaction_service as svc
 from pdf_toolkit.config import AppConfig
+from redaction_fixtures import PERSON, POLICY
 
 tk = pytest.importorskip("tkinter")
 
@@ -51,3 +52,20 @@ def test_shell_and_redaction_tab(root, config, source, capsys):
     assert tab.tree.set(first, "reviewed") == "yes"
     out = capsys.readouterr()
     assert out.out == "" and out.err == ""
+
+
+def test_context_editor_keeps_comments(root, config, source):
+    from pdf_toolkit.gui.redaction.context_editor import ContextEditor
+
+    cfg = AppConfig.load(config)
+    terms = f"# Clients\n{PERSON}\n\n# Codes\n{POLICY}"
+    aliases = f"# Contracts\n\n{POLICY} ; POL-A"
+    editor = ContextEditor(root, cfg, source)
+    for box, text in ((editor.terms, terms), (editor.aliases, aliases)):
+        box.delete("1.0", "end")
+        box.insert("1.0", text)
+    editor.save()
+    reopened = ContextEditor(root, cfg, source)
+    assert reopened.terms.get("1.0", "end-1c") == terms
+    assert reopened.aliases.get("1.0", "end-1c") == aliases
+    reopened.destroy()
