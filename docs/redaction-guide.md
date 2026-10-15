@@ -75,6 +75,7 @@ This creates `D:/originals/2025/.redaction/` with two empty files. Edit them wit
 
   In both files a line starting with `#` is a comment and blank lines are allowed: use them to
   group the rules. They are never redacted, and the GUI context editor shows and saves them as written.
+  A `real,alias` header row in `aliases.csv` is optional and ignored; the GUI drops it when it saves.
 
 - `settings.toml` (optional, create it yourself or with the GUI):
 

@@ -6,6 +6,7 @@ from pdf_redaction.rules.context import FolderSettings, RedactionContext, contex
 from pdf_redaction.rules.java_regex import to_java_patterns, to_python, to_stirling_dialect, unsupported_by_stirling
 from pdf_redaction.rules.patterns import available_packs, get_patterns
 from pdf_redaction.rules.terms import (
+    ALIASES_HEADER,
     TERMS_HEADER,
     load_aliases,
     load_terms,
@@ -83,12 +84,33 @@ def test_empty_terms_text_writes_the_header(tmp_path):
 
 def test_aliases_text_round_trip_keeps_comments_and_blank_lines(tmp_path):
     text = f"# Clients\n\n{PERSON} ; Client A\n# Contracts; misc; notes\n{POLICY} ; POL-A"
-    write_aliases(tmp_path / "a.csv", parse_aliases_text(text + "\n\n"))
+    write_aliases(tmp_path / "a.csv", parse_aliases_text(text + "\n\n"), header=False)
     assert read_aliases_text(tmp_path / "a.csv") == text
     assert [(a.real, a.alias, a.label) for a in load_aliases(tmp_path / "a.csv", "folder-alias")] == [
-        (PERSON, "Client A", "folder-alias#4"),
-        (POLICY, "POL-A", "folder-alias#6"),
+        (PERSON, "Client A", "folder-alias#3"),
+        (POLICY, "POL-A", "folder-alias#5"),
     ]
+
+
+def test_new_aliases_file_starts_with_a_comment_not_a_csv_header(tmp_path):
+    write_aliases(tmp_path / "a.csv", [(POLICY, "POL-A")])
+    lines = (tmp_path / "a.csv").read_text(encoding="utf-8").splitlines()
+    assert lines == [ALIASES_HEADER, f"{POLICY},POL-A"]
+    assert [(a.real, a.label) for a in load_aliases(tmp_path / "a.csv", "x")] == [(POLICY, "x#2")]
+
+
+def test_empty_aliases_text_writes_only_the_header(tmp_path):
+    write_aliases(tmp_path / "a.csv", parse_aliases_text("\n \n"), header=False)
+    assert read_aliases_text(tmp_path / "a.csv") == ALIASES_HEADER
+    assert load_aliases(tmp_path / "a.csv", "x") == []
+
+
+def test_legacy_aliases_header_is_dropped_on_save(tmp_path):
+    (tmp_path / "a.csv").write_text(f"real,alias\n{POLICY},POL-A\n", encoding="utf-8")
+    text = read_aliases_text(tmp_path / "a.csv")
+    assert text == f"{POLICY} ; POL-A"
+    write_aliases(tmp_path / "a.csv", parse_aliases_text(text), header=False)
+    assert (tmp_path / "a.csv").read_text(encoding="utf-8").splitlines() == [f"{POLICY},POL-A"]
 
 
 def test_alias_comments_do_not_change_the_delimiter(tmp_path):

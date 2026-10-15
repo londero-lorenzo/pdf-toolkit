@@ -101,7 +101,7 @@ class ContextEditor(tk.Toplevel):
         packs = None if self.use_default_packs.get() else tuple(p for p, v in self.packs.items() if v.get())
         drop = tuple(c.strip() for c in self.drop.get().split(",") if c.strip())
         write_terms_text(cdir / TERMS_FILENAME, self.terms.get("1.0", "end"))
-        write_aliases(cdir / ALIASES_FILENAME, aliases)
+        write_aliases(cdir / ALIASES_FILENAME, aliases, header=False)
         FolderSettings(pattern_packs=packs, drop_columns=drop).save(cdir / SETTINGS_FILENAME)
         if self.on_saved:
             self.on_saved()

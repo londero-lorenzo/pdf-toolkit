@@ -23,6 +23,7 @@ ALNUM = "A-Za-z0-9À-ÖØ-öø-ÿ"
 WS = "[\\s\\u00a0]"
 CODE_SEPARATORS = "[\\s\\u00a0.\\-/_]"
 TERMS_HEADER = "# One term per line. Lines starting with # are comments."
+ALIASES_HEADER = "# One alias per line: real value, then alias. Lines starting with # are comments."
 
 
 @dataclass(frozen=True)
@@ -143,12 +144,17 @@ def write_terms(path: Path, terms: list[str]) -> None:
     path.write_text(TERMS_HEADER + "\n" + "".join(t.strip() + "\n" for t in terms if t.strip()), encoding="utf-8")
 
 
-def write_aliases(path: Path, aliases: list[tuple[str, str] | str]) -> None:
-    """Header, then one row per alias; ``str`` entries are comment or blank lines, written as they are."""
+def write_aliases(path: Path, aliases: list[tuple[str, str] | str], *, header: bool = True) -> None:
+    """One ``real,alias`` row per alias; ``str`` entries are comment or blank lines, written as they are.
+
+    The first line is the ``ALIASES_HEADER`` comment. ``header=False`` (the editor) writes the entries
+    as typed, and the header only when there are none.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["real", "alias"])
+        if header or not aliases:
+            fh.write(ALIASES_HEADER + writer.dialect.lineterminator)
         for entry in aliases:
             if isinstance(entry, str):
                 if not _is_note(entry):
@@ -175,7 +181,10 @@ def write_terms_text(path: Path, text: str) -> None:
 
 
 def read_aliases_text(path: Path) -> str:
-    """``aliases.csv`` as editor text: ``real ; alias`` per row, comments and blank lines verbatim."""
+    """``aliases.csv`` as editor text: ``real ; alias`` per row, comments and blank lines verbatim.
+
+    A legacy ``real,alias`` header row is dropped, so the next save no longer writes it.
+    """
     path = Path(path)
     if not path.exists():
         return ""
