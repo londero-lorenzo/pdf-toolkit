@@ -1,0 +1,15 @@
+[project]
+name = "pdf-fonts"
+version = "0.1.0"
+description = "Font analysis for PDFs: which fonts a document uses and how reliably its text can be extracted"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["pdf-core", "pypdf>=5.1,<7", "fonttools>=4.50"]
+
+[tool.uv.sources]
+pdf-core = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8,<0.13"]
+build-backend = "uv_build"
