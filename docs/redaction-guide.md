@@ -140,29 +140,39 @@ renaming before running. It prints only counts. Open the CSV yourself: it contai
 ## Optional: `fonts scan` - find pages the checks cannot read
 
 ```
-uv run pdf-toolkit fonts scan PATH... [--csv FILE]
+uv run pdf-toolkit fonts scan PATH... [--show-paths] [--csv FILE]
 ```
 
-The verification can only find what the text extractors can read. Some fonts store no mapping
-from their codes to letters (Type0 "Identity" or Type3 fonts without a `/ToUnicode` map): their
-text comes out as garbage, so a name written with them would go unnoticed. `fonts scan` lists
-such files without modifying anything:
+The verification can only find what the text extractors can read. Two cases escape it:
+
+- **pages without text** (scans, photos, images, blank pages): there is nothing to extract, and
+  redaction cannot remove a name that is part of an image;
+- **fonts without a Unicode map** (Type0 "Identity" or Type3 fonts without `/ToUnicode`): their
+  text comes out as garbage, so a name written with them would go unnoticed.
+
+`fonts scan` lists such files and pages without modifying anything:
 
 ```
 fontTools: installed
-OK   file#1: 4 fonts
-NOTE file#2: 3 fonts; 1 CFF with its own encoding (p1-3): decoded through fontTools
-RISK file#3: 2 fonts; 2 without Unicode map (p2): extracted text unreliable, check visually
---- 3 files: 1 OK, 1 NOTE, 1 RISK
+OK   file#1: 2 pages, 3 fonts; 2 not embedded (look only, text unaffected)
+NOTE file#2: 3 pages, 3 fonts; 1 CFF with its own encoding (p1-3): decoded through fontTools
+RISK file#3: 2 pages, 0 fonts; no text on any page (scan or images only): check visually
+RISK file#4: 5 pages, 2 fonts; no text on p5 (scanned page, image or blank): check visually
+--- 4 files: 1 OK, 1 NOTE, 2 RISK
 ```
 
-- `RISK`: look at the listed pages yourself after `run`, as you would for a scanned page.
+- `RISK`: look at the listed pages yourself after `run`. `verify` also marks scans and pages with
+  images as WARN, but fonts without a Unicode map show up only here.
 - `NOTE`: nothing to do. A CFF font with its own encoding is decoded through fontTools (this is
   what the pypdf message "fontTools is required to fully parse the encoding of a CFF Type1 font"
   was about).
+- `not embedded` is not a problem: the PDF only names the font (Arial, Calibri...) and the viewer
+  draws the text with a font installed on the computer. The look may change slightly; the text,
+  its extraction and the redaction do not.
 
-Files are named `file#N`; `--csv FILE` writes the matching paths to a private report (refused
-inside a protected location).
+Files are named `file#N`. `--show-paths` prints each file's path (relative to the folder) under
+its line: these are the **original** names, so keep that output to yourself. `--csv FILE` writes
+the paths to a private report (refused inside a protected location).
 
 ## Step 4: `redact run` - redact and verify
 

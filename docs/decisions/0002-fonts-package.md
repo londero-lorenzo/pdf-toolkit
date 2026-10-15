@@ -25,13 +25,19 @@ Type3 fonts, both without `/ToUnicode`. For those the only safe answer is a visu
   It is read-only today, but font work that writes PDFs (adding a missing `/ToUnicode` map, for
   example) will live there too, and `pdf-core` must never modify a PDF.
 - **`pdf-toolkit fonts scan PATH...`** prints OK / NOTE / RISK per file with counts and page numbers.
+  RISK means pages to check visually: pages that use no font (no text: scans, images), fonts
+  without a Unicode map, unreadable or encrypted files. A font that is not embedded stays OK: it
+  changes how the page looks, not the extracted text.
 
 ## Privacy
 
 - Results carry font kinds, issue codes, counts and page numbers, never font names: a custom
   font name can identify the organisation a document comes from.
-- Files are printed as `file#N`. The paths go only to the optional `--csv` report, which is
-  refused inside a protected location, like the other private outputs.
+- Files are printed as `file#N`. The paths go to the optional `--csv` report, which is refused
+  inside a protected location, like the other private outputs.
+- `--show-paths` prints the paths on the console too. A `file#N` alone does not tell the user
+  which file to open, and the scan runs on originals, before any redaction. It is opt-in, so the
+  default output stays safe to paste; the help says the paths are original names.
 
 ## Not done (yet)
 
