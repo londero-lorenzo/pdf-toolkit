@@ -58,6 +58,17 @@ def test_standard_font_has_no_issue(tmp_path):
     assert font.kind is FontKind.STANDARD14
     assert font.issues == frozenset()
     assert font.pages == (1, 2)
+    assert report.page_count == 2 and report.textless_pages == []
+
+
+def test_pages_without_fonts_have_no_text(tmp_path):
+    doc = Doc()
+    doc.page(b"/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>")
+    doc.page(b"")
+    doc.page(b"/XObject << >>")
+    report = scan_fonts(doc.write(tmp_path / "a.pdf"))
+    assert report.page_count == 3
+    assert report.textless_pages == [2, 3]
 
 
 def test_cff_font_with_its_own_encoding(tmp_path):

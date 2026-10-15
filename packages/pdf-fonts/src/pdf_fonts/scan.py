@@ -7,7 +7,10 @@ its /Encoding, and the encoding built into the embedded font program. Issues fou
   own encoding. pypdf decodes it only when fontTools is installed;
 - ``no-unicode-map``: a Type0 font with an Identity or embedded CMap, or a Type3 font, without
   /ToUnicode. No library can recover the text reliably: check the pages visually;
-- ``not-embedded``: a font other than the standard 14 that is not embedded (informative).
+- ``not-embedded``: a font other than the standard 14 that is not embedded. The PDF names the font
+  and the viewer draws the text with a local one: the look may change, the extracted text does not.
+
+Pages that use no font at all carry no text (scans, images, blank pages): ``textless_pages``.
 """
 
 from __future__ import annotations
@@ -68,6 +71,8 @@ class FontEntry:
 @dataclass
 class FontReport:
     fonts: list[FontEntry] = field(default_factory=list)
+    page_count: int = 0
+    textless_pages: list[int] = field(default_factory=list)  # 1-based pages that use no font
     encrypted: bool = False
     error: str = ""  # exception type name when the file cannot be read, never its message
 
@@ -98,12 +103,15 @@ def scan_fonts(path: str | Path) -> FontReport:
             for key, font in _page_fonts(page):
                 fonts.setdefault(key, font)
                 pages.setdefault(key, set()).add(number)
+        report.page_count = len(reader.pages)
+        with_fonts = {n for numbers in pages.values() for n in numbers}
+        report.textless_pages = [n for n in range(1, report.page_count + 1) if n not in with_fonts]
         cff_cache: dict[object, bool] = {}
         for key, font in fonts.items():
             kind, issues = _classify(font, cff_cache)
             report.fonts.append(FontEntry(kind, frozenset(issues), tuple(sorted(pages[key]))))
     except Exception as exc:
-        report.fonts = []
+        report.fonts, report.page_count, report.textless_pages = [], 0, []
         report.error = type(exc).__name__
     return report
 
