@@ -45,7 +45,8 @@ def workspace_for(cfg: AppConfig, alias: str) -> Path:
 
 
 def create_session(cfg: AppConfig, source: Path, alias: str, workspace: Path | None = None) -> Session:
-    # the alias becomes a public folder name (<output_root>/<alias>): it must not leak anything itself
+    # the alias names the workspace and the default publish folder (<output_root>/<alias>): it must not
+    # leak anything itself
     if NameRedactor(load_context(cfg, source)).findings(alias):
         raise GuardError("alias matches a redaction rule (term, alias, PII or long code): choose a neutral one")
     return Session.create(source, workspace or workspace_for(cfg, alias), alias, protected(cfg))
@@ -91,8 +92,18 @@ def verify(cfg: AppConfig, session: Session) -> list[FileVerdict]:
     return verify_session(session, load_context(cfg, session.source))
 
 
-def publish_session(cfg: AppConfig, session: Session, output_root: Path | None = None) -> PublishReport:
-    target = output_root or cfg.redaction.output_root
+def default_destination(cfg: AppConfig, session: Session) -> Path | None:
+    """Where ``publish`` goes without ``--to``: the last destination, else ``<output_root>/<alias>``."""
+    if session.destination:
+        return session.destination
+    root = cfg.redaction.output_root
+    return root / session.alias if root else None
+
+
+def publish_session(cfg: AppConfig, session: Session, destination: Path | None = None) -> PublishReport:
+    """Publish exactly into ``destination`` (or the default one) and remember it in the session."""
+    target = destination or default_destination(cfg, session)
     if not target:
-        raise GuardError("no output folder: set redaction.output_root or pass --output")
-    return publish(session, load_context(cfg, session.source), target)
+        raise GuardError("no destination: pass --to FOLDER (or set redaction.output_root for a default)")
+    root = cfg.redaction.workspace_root
+    return publish(session, load_context(cfg, session.source), target, keep_apart=[root] if root else [])

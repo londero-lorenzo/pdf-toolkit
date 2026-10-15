@@ -8,7 +8,7 @@ from pdf_redaction.audit import audit_repo
 from pdf_redaction.engines.text import TextEngine
 from pdf_redaction.guards import GuardError
 from pdf_redaction.pipeline import plan_names, run_session
-from pdf_redaction.publish import publish
+from pdf_redaction.publish import FOREIGN_REASON, PUBLISHED_FILE, foreign_files, publish
 from pdf_redaction.rules.context import RedactionContext, context_dir
 from pdf_redaction.rules.terms import write_terms
 from pdf_redaction.session import Session
@@ -91,13 +91,14 @@ def test_publish_rules(tmp_path, session, ctx, engines):
     out = tmp_path / "shared"
     report = publish(session, ctx, out)
     assert "ABCDEPOL-A.pdf" in dict(report.blocked)  # WARN, not reviewed yet
-    assert (out / "sample-2025" / "movements.csv").exists()
-    assert (out / "sample-2025" / "_text" / "Customer_Profile_n.POL-A-REDACTED" / "statement_2025-12.pdf.txt").exists()
+    assert (out / "movements.csv").exists()  # exactly into the destination, no alias sub-folder
+    assert not (out / "sample-2025").exists()
+    assert (out / "_text" / "Customer_Profile_n.POL-A-REDACTED" / "statement_2025-12.pdf.txt").exists()
     session.set_reviewed(["ABCDEPOL-A.pdf"])
     report = publish(session, ctx, out)
     assert "ABCDEPOL-A.pdf" in report.published
-    published = json.loads((out / "sample-2025" / ".published.json").read_text(encoding="utf-8"))
-    assert "ABCDEPOL-A.pdf" in published
+    published = json.loads((out / ".published.json").read_text(encoding="utf-8"))
+    assert published["alias"] == "sample-2025" and "ABCDEPOL-A.pdf" in published["files"]
     for p in out.rglob("*"):
         if p.is_file():
             assert PERSON not in p.read_text(encoding="utf-8", errors="ignore")
@@ -139,6 +140,85 @@ def test_publish_refuses_output_inside_workspace(session, ctx, engines):
     run_session(session, ctx, engines)
     with pytest.raises(GuardError):
         publish(session, ctx, session.workspace / "out")
+
+
+def test_destination_is_remembered_by_the_session(tmp_path, session, ctx, engines):
+    run_session(session, ctx, engines)
+    assert session.destination is None
+    out = tmp_path / "shared"
+    publish(session, ctx, out)
+    assert session.destination == out.resolve()
+    assert Session.open(session.workspace).destination == out.resolve()
+    data = json.loads((session.workspace / "session.json").read_text(encoding="utf-8"))
+    assert data["alias"] == "sample-2025"  # the other keys are kept
+
+
+def test_changed_destination_leaves_the_previous_one(tmp_path, session, ctx, engines):
+    run_session(session, ctx, engines)
+    a, b = tmp_path / "a", tmp_path / "b"
+    first = publish(session, ctx, a)
+    assert first.previous_destination is None
+    before = {p.relative_to(a).as_posix(): p.read_bytes() for p in a.rglob("*") if p.is_file()}
+    report = publish(session, ctx, b)
+    assert report.previous_destination == a.resolve()
+    assert report.previous_destination_files == sum(1 for p in a.rglob("*") if p.is_file() and p.name != PUBLISHED_FILE)
+    assert report.previous_destination_files >= len(first.published) > 0
+    assert report.published == first.published and report.removed_stale == 0
+    assert {p.relative_to(a).as_posix(): p.read_bytes() for p in a.rglob("*") if p.is_file()} == before
+    # going back to A only touches A's own files
+    again = publish(session, ctx, a)
+    assert again.previous_destination == b.resolve() and again.removed_stale == 0
+
+
+def test_foreign_files_are_never_deleted_or_overwritten(tmp_path, session, ctx, engines):
+    run_session(session, ctx, engines)
+    out = tmp_path / "shared"
+    out.mkdir()
+    (out / "keep.txt").write_text("mine", encoding="utf-8")
+    (out / "movements.csv").write_text("not ours", encoding="utf-8")
+    assert foreign_files(out, session.alias) == 2
+    report = publish(session, ctx, out)
+    assert dict(report.blocked)["movements.csv"] == FOREIGN_REASON
+    assert "movements.csv" not in report.published and report.foreign_files == 2
+    assert (out / "movements.csv").read_text(encoding="utf-8") == "not ours"
+    publish(session, ctx, out)  # a second publish (which also removes stale files) leaves them alone
+    assert (out / "keep.txt").read_text(encoding="utf-8") == "mine"
+    assert (out / "movements.csv").read_text(encoding="utf-8") == "not ours"
+
+
+def test_folder_published_by_another_session_is_refused(tmp_path, session, ctx, engines):
+    run_session(session, ctx, engines)
+    out = tmp_path / "shared"
+    out.mkdir()
+    (out / PUBLISHED_FILE).write_text(json.dumps({"schema": 2, "alias": "other", "files": ["x.pdf"]}), encoding="utf-8")
+    (out / "x.pdf").write_bytes(b"theirs")
+    with pytest.raises(GuardError, match="another session"):
+        publish(session, ctx, out)
+    assert (out / "x.pdf").read_bytes() == b"theirs"
+
+
+def test_legacy_published_list_is_accepted_and_rewritten(tmp_path, session, ctx, engines):
+    run_session(session, ctx, engines)
+    out = tmp_path / "shared"
+    out.mkdir()
+    (out / PUBLISHED_FILE).write_text(json.dumps(["old.pdf", "../escape.txt"]), encoding="utf-8")
+    (out / "old.pdf").write_bytes(b"stale")
+    (tmp_path / "escape.txt").write_text("outside", encoding="utf-8")
+    report = publish(session, ctx, out)
+    assert report.removed_stale == 1 and not (out / "old.pdf").exists()
+    assert (tmp_path / "escape.txt").exists()  # entries leading out of the folder are ignored
+    assert json.loads((out / PUBLISHED_FILE).read_text(encoding="utf-8"))["alias"] == "sample-2025"
+
+
+def test_destination_guards(tmp_path, session, source, ctx, engines):
+    run_session(session, ctx, engines)
+    workspace_root = session.workspace.parent
+    for bad in (source, source / "out", source.parent, session.workspace, session.workspace.parent):
+        with pytest.raises(GuardError):
+            publish(session, ctx, bad, keep_apart=[workspace_root])
+    with pytest.raises(GuardError):
+        publish(session, ctx, workspace_root / "other", keep_apart=[workspace_root])
+    assert session.destination is None
 
 
 def test_plan_names_is_deterministic(session, ctx):

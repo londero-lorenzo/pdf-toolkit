@@ -3,7 +3,7 @@
 Workspace layout::
 
     <workspace>/
-      session.json      alias, source folder, creation time
+      session.json      alias, source folder, creation time, last publish destination
       manifest.json     relative path, size and SHA-256 of every copied original
       originals/        byte-for-byte copy of the source (the ``.redaction`` folder excluded)
       redacted/         engine output, with redacted names
@@ -63,6 +63,7 @@ class Session:
     alias: str
     source: Path
     created: str
+    destination: Path | None = None  # last publish destination, remembered between publishes
 
     @property
     def originals_dir(self) -> Path:
@@ -117,7 +118,16 @@ class Session:
             data = json.loads((workspace / SESSION_FILE).read_text(encoding="utf-8"))
         except FileNotFoundError:
             raise GuardError("not a session workspace (session.json missing)") from None
-        return cls(workspace, data["alias"], Path(data["source"]), data["created"])
+        destination = Path(data["destination"]) if data.get("destination") else None
+        return cls(workspace, data["alias"], Path(data["source"]), data["created"], destination)
+
+    def set_destination(self, destination: Path) -> None:
+        """Remember where this session was last published (kept in ``session.json``)."""
+        path = self.workspace / SESSION_FILE
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["destination"] = str(destination)
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        self.destination = Path(destination)
 
     def sync_originals(self) -> SyncResult:
         """Mirror the source into ``originals/``. The source is only read."""

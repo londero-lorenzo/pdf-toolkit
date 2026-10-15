@@ -7,7 +7,17 @@ path that still triggers a rule is replaced by ``file#N``.
 
 from __future__ import annotations
 
-from pdf_redaction.verify import FileVerdict, Status
+from pathlib import Path
+
+from pdf_redaction.rules.context import RedactionContext
+from pdf_redaction.verify import FileVerdict, Status, scan_path
+
+HIDDEN_FOLDER = "(folder hidden: its path matches a redaction rule)"
+
+
+def safe_folder(path: Path, ctx: RedactionContext) -> str:
+    """A folder path that is safe to print: the path itself unless any part of it matches a rule."""
+    return HIDDEN_FOLDER if scan_path(Path(path), ctx) else Path(path).as_posix()
 
 
 def safe_label(verdict: FileVerdict, index: int) -> str:

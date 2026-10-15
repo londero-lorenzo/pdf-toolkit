@@ -45,7 +45,7 @@ def test_full_cycle_prints_nothing_private(tmp_path, config, source, capsys):
     assert_clean(out.out + out.err)
     assert "remote engine calls: 4" in out.out
     assert tree_hash(source) == before
-    published = tmp_path / "shared" / "out" / "sample-2025"
+    published = tmp_path / "shared" / "out" / "sample-2025"  # default: <output_root>/<alias>
     assert (published / "ABCDEPOL-A.pdf").exists()
     for p in published.rglob("*"):
         if p.is_file():
@@ -91,6 +91,60 @@ def test_help_of_the_main_steps(capsys):
         with pytest.raises(SystemExit):
             main(["redact", cmd, "--help"])
         assert "docs/redaction-guide.md" in capsys.readouterr().out
+
+
+def test_publish_to_a_folder_is_remembered(tmp_path, config, source, capsys):
+    x, y = tmp_path / "send" / "x", tmp_path / "send" / "y"
+    assert cli(config, "redact", "new", str(source), "sample-2025") == 0
+    cli(config, "redact", "run", "sample-2025")
+    assert cli(config, "redact", "review", "sample-2025", "ABCDEPOL-A.pdf") == 0
+    capsys.readouterr()
+    assert cli(config, "redact", "publish", "sample-2025", "--to", str(x)) == 0
+    out = capsys.readouterr().out
+    assert "destination (--to)" in out and (x / "movements.csv").exists()
+    assert not (tmp_path / "shared" / "out" / "sample-2025").exists()
+    assert cli(config, "redact", "publish", "sample-2025") == 0  # no --to: the last destination again
+    out = capsys.readouterr().out
+    assert "destination (last used)" in out and "destination changed" not in out
+    assert not (tmp_path / "shared" / "out" / "sample-2025").exists()
+    assert cli(config, "redact", "publish", "sample-2025", "--to", str(y)) == 0
+    out = capsys.readouterr().out
+    assert "destination changed; the previous one was left as it was" in out
+    assert x.as_posix() in out and "file(s) published there)" in out
+    assert (x / "movements.csv").exists() and (y / "movements.csv").exists()
+    assert_clean(out)
+
+
+def test_publish_prints_a_hidden_marker_for_paths_matching_rules(tmp_path, config, source, capsys):
+    leaky, clean = tmp_path / "send" / PERSON.replace(" ", "_"), tmp_path / "send" / "ok"
+    assert cli(config, "redact", "new", str(source), "sample-2025") == 0
+    cli(config, "redact", "run", "sample-2025")
+    capsys.readouterr()
+    cli(config, "redact", "publish", "sample-2025", "--to", str(leaky))
+    cli(config, "redact", "publish", "sample-2025", "--to", str(clean))
+    out = capsys.readouterr()
+    assert out.out.count("(folder hidden: its path matches a redaction rule)") == 2  # as current, then as previous
+    assert_clean(out.out + out.err)
+
+
+def test_publish_needs_a_destination_without_output_root(tmp_path, source, server, capsys):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[redaction]\nworkspace_root = "{(tmp_path / "ws").as_posix()}"\nengines = ["text"]\n', encoding="utf-8"
+    )
+    assert cli(cfg, "redact", "new", str(source), "sample-2025") == 0
+    capsys.readouterr()
+    assert cli(cfg, "redact", "publish", "sample-2025") == 1
+    assert "no destination" in capsys.readouterr().err
+
+
+def test_publish_refuses_a_destination_inside_workspace_root(tmp_path, config, source, capsys):
+    assert cli(config, "redact", "new", str(source), "sample-2025") == 0
+    capsys.readouterr()
+    assert (
+        cli(config, "redact", "publish", "sample-2025", "--to", str(tmp_path / "private" / "workspaces" / "out")) == 1
+    )
+    assert "must not contain each other" in capsys.readouterr().err
 
 
 def test_publish_hides_paths_that_match_new_rules(config, source, capsys):

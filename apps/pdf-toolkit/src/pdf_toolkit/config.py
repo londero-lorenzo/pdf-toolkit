@@ -24,7 +24,8 @@ global_alias_files = []
 pattern_packs = ["common"]
 # Where private workspaces (copies of the originals) are created
 workspace_root = ""
-# Where verified files are published (<output_root>/<alias>/...)
+# Optional default for "publish": <output_root>/<alias>, used until the session has a destination.
+# "publish --to FOLDER" overrides it and is remembered for that session.
 output_root = ""
 # Folders where unredacted data must never land (synced, shared, read by other tools...)
 protected_locations = []

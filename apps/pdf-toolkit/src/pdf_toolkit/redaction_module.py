@@ -13,7 +13,7 @@ from pdf_redaction.verify import Status, Strength, scan_path
 from pdf_toolkit import redaction_service as svc
 from pdf_toolkit.config import AppConfig
 from pdf_toolkit.modules import ToolkitModule
-from pdf_toolkit.safety import exit_code, totals, verdict_line
+from pdf_toolkit.safety import exit_code, safe_folder, totals, verdict_line
 
 
 def _new(args, cfg: AppConfig) -> int:
@@ -96,12 +96,27 @@ def _review(args, cfg: AppConfig) -> int:
 
 def _publish(args, cfg: AppConfig) -> int:
     session = svc.open_session(cfg, args.session)
-    report = svc.publish_session(cfg, session, Path(args.output) if args.output else None)
     ctx = svc.load_context(cfg, session.source)
+    if args.to:
+        target, origin = Path(args.to), "--to"
+    else:
+        target = svc.default_destination(cfg, session)
+        origin = "last used" if session.destination else "output_root/<alias>"
+    if target:
+        print(f"destination ({origin}): {safe_folder(target, ctx)}")
+    report = svc.publish_session(cfg, session, target)
     for index, (rel, reason) in enumerate(report.blocked, 1):
         leaks = any(f.strength is Strength.STRONG for f in scan_path(PurePosixPath(rel), ctx))
         print(f"HOLD {f'file#{index}' if leaks else rel}: {reason}")
     print(f"{len(report.published)} published, {len(report.blocked)} held back, {report.removed_stale} stale removed")
+    if report.foreign_files:
+        print(f"note: the destination holds {report.foreign_files} file(s) not written by pdf-toolkit: left untouched")
+    if report.previous_destination:
+        print(
+            "note: destination changed; the previous one was left as it was: "
+            f"{safe_folder(report.previous_destination, ctx)} "
+            f"({report.previous_destination_files} file(s) published there)"
+        )
     return 0 if not report.blocked else 2
 
 
@@ -132,6 +147,7 @@ NEW_HELP = f"""Create a session: copy SOURCE into a private workspace. Nothing i
 Run it once per source folder; later changes in SOURCE are picked up by 'run'.
 The workspace is <workspace_root>/<ALIAS> unless --workspace is given; it holds the
 unredacted copy, so it must not be inside SOURCE, output_root or a protected location.
+The ALIAS also names the default publish folder, <output_root>/<ALIAS>.
 
 examples:
   pdf-toolkit redact new "D:/originals/2025" invoices-2025
@@ -178,23 +194,33 @@ examples:
 
 {GUIDE}"""
 
-PUBLISH_HELP = f"""Copy the files that are safe to share to <output_root>/<ALIAS>/.
+PUBLISH_HELP = f"""Copy the files that are safe to share into a destination folder.
 
 Nothing is redacted here: run 'run' first. Each file is verified again with the current
 rules and copied only if OK, or WARN and reviewed. Held back: FAIL, WARN not reviewed,
 files redacted with older rules, skipped types, errors. Next to each PDF a text extract
-is written to _text/<path>.txt. Run it again whenever you like: the output folder is
-brought in line with the session, and files this session published earlier that no
-longer qualify are removed.
+is written to _text/<path>.txt.
+
+The destination is the exact folder the files go into (no <ALIAS> sub-folder). Without --to
+it is the one used last time by this session; the first time, <output_root>/<ALIAS> if
+output_root is set, else --to is required. It must not contain or be inside SOURCE, the
+workspace or workspace_root.
+
+Run it again whenever you like: the destination is brought in line with the session, and
+files this session published there earlier that no longer qualify are removed. Files that
+pdf-toolkit did not write are never deleted or overwritten (a file with the same name is
+held back). If you publish somewhere else, the previous folder is left as it was and
+reported.
 
 output lines:
+  destination (--to): E:/to-share
   HOLD <path>: WARN: mark it as reviewed first
   3 published, 1 held back, 0 stale removed
 exit codes: 0 everything published, 2 something held back
 
 examples:
+  pdf-toolkit redact publish invoices-2025 --to "E:/to-share"
   pdf-toolkit redact publish invoices-2025
-  pdf-toolkit redact publish invoices-2025 --output "E:/to-share"
 
 {GUIDE}"""
 
@@ -211,7 +237,7 @@ def add_cli(subparsers) -> None:
     s.add_argument(
         "alias",
         help="public session name, 1-64 letters, digits, . _ - (e.g. invoices-2025). It names the workspace "
-        "and the published folder, so it must not contain personal data",
+        "and the default publish folder, so it must not contain personal data",
     )
     s.add_argument("--workspace", help="workspace folder (default: <workspace_root>/<alias>)")
     s.set_defaults(handler=_new)
@@ -250,7 +276,12 @@ def add_cli(subparsers) -> None:
         "publish", help="copy verified files to the output folder", description=PUBLISH_HELP, formatter_class=raw
     )
     s.add_argument("session", help=SESSION_ARG)
-    s.add_argument("--output", help="output root, the session goes in <output>/<alias>/ (default: output_root)")
+    s.add_argument(
+        "--to",
+        metavar="FOLDER",
+        help="publish exactly into FOLDER and remember it for this session "
+        "(default: the last destination, else <output_root>/<alias>)",
+    )
     s.set_defaults(handler=_publish)
 
     s = sub.add_parser("audit-repo", help="check files a git repository would publish")

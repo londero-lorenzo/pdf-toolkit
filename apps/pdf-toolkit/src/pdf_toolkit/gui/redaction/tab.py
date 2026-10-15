@@ -9,6 +9,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pdf_redaction.pipeline import plan_names
+from pdf_redaction.publish import foreign_files
 from pdf_redaction.session import Session
 from pdf_redaction.verify import FileVerdict, Status
 from pdf_toolkit import redaction_service as svc
@@ -199,28 +200,82 @@ class RedactionTab(ttk.Frame):
     def publish(self) -> None:
         if not self.session:
             return
-        target = self.cfg.redaction.output_root
-        if not target:
-            chosen = filedialog.askdirectory(parent=self, title="Output folder for the verified files")
-            if not chosen:
-                return
-            target = Path(chosen)
-        if not messagebox.askyesno(
-            "Publish", f"Copy verified files to:\n{Path(target) / self.session.alias}", parent=self
-        ):
-            return
         session = self.session
-        self._background(
-            lambda: svc.publish_session(self.cfg, session, Path(target)), self._show_publish, "Publishing..."
+        initial = svc.default_destination(self.cfg, session)
+        chosen = self._ask_destination(initial)
+        if not chosen:
+            return
+        target = Path(chosen)
+        try:
+            foreign = foreign_files(target, session.alias)
+        except Exception as exc:  # e.g. the folder belongs to another session
+            messagebox.showerror("Publish", describe_error(exc), parent=self)
+            return
+        lines = [f"Copy verified files exactly into:\n{target}"]
+        if foreign:
+            lines.append(f"\n{foreign} file(s) there were not written by pdf-toolkit: they are left untouched.")
+        if session.destination and session.destination.resolve() != target.resolve():
+            lines.append(f"\nThe previous destination stays as it is:\n{session.destination}")
+        if not messagebox.askyesno("Publish", "\n".join(lines), parent=self):
+            return
+        self._background(lambda: svc.publish_session(self.cfg, session, target), self._show_publish, "Publishing...")
+
+    def _ask_destination(self, initial: Path | None) -> str | None:
+        """Modal dialog: a folder path (editable) with a Browse button. Returns it, or None if cancelled."""
+        win = tk.Toplevel(self)
+        win.title("Publish destination")
+        win.transient(self.winfo_toplevel())
+        win.resizable(True, False)
+        var = tk.StringVar(value=str(initial) if initial else "")
+        ttk.Label(win, text="Publish into this folder (exactly, no alias sub-folder):").pack(
+            anchor="w", padx=10, pady=(10, 2)
         )
+        row = ttk.Frame(win)
+        row.pack(fill="x", padx=10)
+        entry = ttk.Entry(row, textvariable=var, width=70)
+        entry.pack(side="left", fill="x", expand=True)
+
+        def browse() -> None:
+            folder = filedialog.askdirectory(parent=win, title="Destination folder", initialdir=var.get() or None)
+            if folder:
+                var.set(folder)
+
+        ttk.Button(row, text="Browse...", command=browse).pack(side="left", padx=(6, 0))
+        result: list[str | None] = [None]
+
+        def accept() -> None:
+            result[0] = var.get().strip() or None
+            win.destroy()
+
+        buttons = ttk.Frame(win)
+        buttons.pack(fill="x", padx=10, pady=10)
+        ttk.Button(buttons, text="Cancel", command=win.destroy).pack(side="right")
+        ttk.Button(buttons, text="Publish", command=accept).pack(side="right", padx=6)
+        win.bind("<Return>", lambda _e: accept())
+        win.bind("<Escape>", lambda _e: win.destroy())
+        entry.focus_set()
+        win.grab_set()
+        self.wait_window(win)
+        return result[0]
 
     def _show_publish(self, report) -> None:
         held = "\n".join(f"- {rel}: {reason}" for rel, reason in report.blocked[:15])
         more = f"\n... and {len(report.blocked) - 15} more" if len(report.blocked) > 15 else ""
+        notes = ""
+        if report.foreign_files:
+            notes += (
+                f"\n\n{report.foreign_files} file(s) in the destination were not written by pdf-toolkit: "
+                "left untouched."
+            )
+        if report.previous_destination:
+            notes += (
+                f"\n\nDestination changed. The previous one was left as it was:\n{report.previous_destination} "
+                f"({report.previous_destination_files} file(s) published there)."
+            )
         messagebox.showinfo(
             "Publish",
             f"{len(report.published)} published, {len(report.blocked)} held back, "
-            f"{report.removed_stale} stale removed." + (f"\n\nHeld back:\n{held}{more}" if held else ""),
+            f"{report.removed_stale} stale removed." + notes + (f"\n\nHeld back:\n{held}{more}" if held else ""),
             parent=self,
         )
 
