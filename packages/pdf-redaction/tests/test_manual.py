@@ -162,8 +162,7 @@ def test_discard_of_an_edit_not_yet_processed(session, source, engine):
     assert BOX not in extract_text(session.redacted_dir / STATEMENT)
 
 
-def test_older_ledgers_are_never_treated_as_edited(session, source, engine):
-    run(session, source, engine)
+def strip_new_ledger_columns(session):
     with open(session.ledger_path, encoding="utf-8", newline="") as fh:
         rows = list(csv.DictReader(fh))
     old_fields = [f for f in rows[0] if f not in ("output_sha256", "base")]
@@ -171,9 +170,23 @@ def test_older_ledgers_are_never_treated_as_edited(session, source, engine):
         writer = csv.DictWriter(fh, fieldnames=old_fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
-    edit_by_hand(session.redacted_dir / STATEMENT)
+
+
+def test_older_ledgers_are_never_treated_as_edited(session, source, engine):
+    run(session, source, engine)
+    strip_new_ledger_columns(session)
+    edit_by_hand(session.redacted_dir / STATEMENT)  # made before the upgrade: cannot be told apart
     report = run(session, source, engine)
     assert report.manual_found == 0 and item(report).outcome == "unchanged"
+
+
+def test_older_ledgers_detect_edits_made_after_the_first_run(session, source, engine):
+    run(session, source, engine)
+    strip_new_ledger_columns(session)
+    run(session, source, engine)  # unchanged files get their output hash
+    edit_by_hand(session.redacted_dir / STATEMENT)
+    report = run(session, source, engine)
+    assert report.manual_found == 1 and item(report).manual
 
 
 def test_workspace_files_hold_no_rule_in_clear(session, source, engine):

@@ -146,7 +146,10 @@ def run_session(
             and original not in edited  # a fresh edit is always sanitized and verified by a run
             and ledger.is_current(original, sha, fingerprint, engine_id, session.redacted_dir)
         ):
-            on_manual = ledger.entries[original].base == BASE_MANUAL
+            entry = ledger.entries[original]
+            if not entry.output_sha256:  # ledger from an older version: edits from now on are detected
+                entry.output_sha256 = sha256_file(dst)
+            on_manual = entry.base == BASE_MANUAL
             return ItemResult(
                 original, redacted, "unchanged", verify_file(dst, PurePosixPath(redacted), ctx), manual=on_manual
             )

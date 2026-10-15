@@ -285,8 +285,11 @@ uv run pdf-toolkit redact reset-manual SESSION [PATH ...]
 
 (no `PATH`: every file). In the GUI, select the rows and press *Discard manual edits*.
 
-Two limits to keep in mind:
+Limits to keep in mind:
 
+- Sessions started with a version of pdf-toolkit older than this feature: the first `run` after the
+  update records what each file looks like. Boxes saved *before* that run cannot be told apart from
+  the engine's output and are lost when the file is redone. Run once after updating, then draw.
 - The checks read text and rules. They cannot tell whether what was under *your* box (a logo, a
   header that is not a term) was really removed or only covered: that depends on the tool you drew
   the box with. Before you `review` the file, try to select or copy the text under a box: if you
