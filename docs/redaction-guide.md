@@ -73,6 +73,9 @@ This creates `D:/originals/2025/.redaction/` with two empty files. Edit them wit
   00999888777666555,POL-A
   ```
 
+  In both files a line starting with `#` is a comment and blank lines are allowed: use them to
+  group the rules. They are never redacted, and the GUI context editor shows and saves them as written.
+
 - `settings.toml` (optional, create it yourself or with the GUI):
 
   ```toml

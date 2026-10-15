@@ -14,7 +14,13 @@ from pdf_redaction.rules.context import (
     context_dir,
 )
 from pdf_redaction.rules.patterns import available_packs
-from pdf_redaction.rules.terms import load_aliases, load_terms, write_aliases, write_terms
+from pdf_redaction.rules.terms import (
+    parse_aliases_text,
+    read_aliases_text,
+    read_terms_text,
+    write_aliases,
+    write_terms_text,
+)
 from pdf_toolkit import redaction_service as svc
 from pdf_toolkit.config import AppConfig
 
@@ -40,19 +46,25 @@ class ContextEditor(tk.Toplevel):
         nb.pack(fill="both", expand=True, padx=10, pady=4)
 
         terms_frame = ttk.Frame(nb, padding=6)
-        ttk.Label(terms_frame, text="One term per line: names, codes, addresses, dates...").pack(anchor="w")
+        ttk.Label(
+            terms_frame,
+            text="One term per line: names, codes, addresses, dates... "
+            "Lines starting with # are comments; blank lines are allowed.",
+        ).pack(anchor="w")
         self.terms = tk.Text(terms_frame, height=15, undo=True)
         self.terms.pack(fill="both", expand=True)
-        self.terms.insert("1.0", "\n".join(t.value for t in load_terms(cdir / TERMS_FILENAME, "folder")))
+        self.terms.insert("1.0", read_terms_text(cdir / TERMS_FILENAME))
         nb.add(terms_frame, text="Terms")
 
         alias_frame = ttk.Frame(nb, padding=6)
-        ttk.Label(alias_frame, text="One per line: real value ; alias (the alias replaces the value)").pack(anchor="w")
+        ttk.Label(
+            alias_frame,
+            text="One per line: real value ; alias (the alias replaces the value). "
+            "Lines starting with # are comments; blank lines are allowed.",
+        ).pack(anchor="w")
         self.aliases = tk.Text(alias_frame, height=15, undo=True)
         self.aliases.pack(fill="both", expand=True)
-        self.aliases.insert(
-            "1.0", "\n".join(f"{a.real} ; {a.alias}" for a in load_aliases(cdir / ALIASES_FILENAME, "folder"))
-        )
+        self.aliases.insert("1.0", read_aliases_text(cdir / ALIASES_FILENAME))
         nb.add(alias_frame, text="Aliases")
 
         settings = FolderSettings.load(cdir / SETTINGS_FILENAME)
@@ -81,19 +93,14 @@ class ContextEditor(tk.Toplevel):
 
     def save(self) -> None:
         cdir = context_dir(self.source)
-        terms = [line.strip() for line in self.terms.get("1.0", "end").splitlines() if line.strip()]
-        aliases = []
-        for number, line in enumerate(self.aliases.get("1.0", "end").splitlines(), 1):
-            if not line.strip():
-                continue
-            real, sep, alias = line.partition(";")
-            if not sep or not real.strip() or not alias.strip():
-                messagebox.showerror("Aliases", f"Line {number}: use 'real value ; alias'", parent=self)
-                return
-            aliases.append((real.strip(), alias.strip()))
+        try:
+            aliases = parse_aliases_text(self.aliases.get("1.0", "end"))
+        except ValueError as err:
+            messagebox.showerror("Aliases", str(err), parent=self)
+            return
         packs = None if self.use_default_packs.get() else tuple(p for p, v in self.packs.items() if v.get())
         drop = tuple(c.strip() for c in self.drop.get().split(",") if c.strip())
-        write_terms(cdir / TERMS_FILENAME, terms)
+        write_terms_text(cdir / TERMS_FILENAME, self.terms.get("1.0", "end"))
         write_aliases(cdir / ALIASES_FILENAME, aliases)
         FolderSettings(pattern_packs=packs, drop_columns=drop).save(cdir / SETTINGS_FILENAME)
         if self.on_saved:

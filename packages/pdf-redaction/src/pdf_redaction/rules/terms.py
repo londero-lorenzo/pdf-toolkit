@@ -22,6 +22,7 @@ from pathlib import Path
 ALNUM = "A-Za-z0-9À-ÖØ-öø-ÿ"
 WS = "[\\s\\u00a0]"
 CODE_SEPARATORS = "[\\s\\u00a0.\\-/_]"
+TERMS_HEADER = "# One term per line. Lines starting with # are comments."
 
 
 @dataclass(frozen=True)
@@ -95,33 +96,112 @@ def load_terms(path: Path, label_prefix: str) -> list[Term]:
     return out
 
 
+def _is_note(line: str) -> bool:
+    """A blank line or a ``#`` comment: kept in the files, never a rule."""
+    stripped = line.strip()
+    return not stripped or stripped.startswith("#")
+
+
+def _is_header(row: list[str]) -> bool:
+    return len(row) >= 2 and row[0].strip().lower() == "real" and row[1].strip().lower() == "alias"
+
+
+def _alias_delimiter(lines: list[str]) -> str:
+    data = "\n".join(line for line in lines if not _is_note(line))
+    return ";" if data.count(";") > data.count(",") else ","
+
+
+def _alias_rows(path: Path):
+    """Yield ``(line number, raw line, parsed row or None for notes and the header)``."""
+    lines = read_text(path).splitlines()
+    delimiter = _alias_delimiter(lines)
+    first = True
+    for number, line in enumerate(lines, 1):
+        if _is_note(line):
+            yield number, line, None
+            continue
+        row = next(csv.reader([line], delimiter=delimiter), [])
+        header, first = first and _is_header(row), False
+        yield number, line, None if header else row
+
+
 def load_aliases(path: Path, label_prefix: str) -> list[Alias]:
-    """CSV with two columns ``real,alias`` (header optional, ``;`` or ``,``)."""
+    """CSV with two columns ``real,alias`` (header optional, ``;`` or ``,``; ``#`` comments and blank lines ignored)."""
     path = Path(path)
     if not path.exists():
         return []
-    text = read_text(path)
-    delimiter = ";" if text.count(";") > text.count(",") else ","
     out = []
-    for number, row in enumerate(csv.reader(text.splitlines(), delimiter=delimiter), 1):
-        if len(row) < 2 or not row[0].strip() or not row[1].strip() or row[0].lstrip().startswith("#"):
+    for number, _, row in _alias_rows(path):
+        if row is None or len(row) < 2 or not row[0].strip() or not row[1].strip() or row[0].lstrip().startswith("#"):
             continue
-        real, alias = normalize(row[0]).strip(), row[1].strip()
-        if number == 1 and real.lower() == "real" and alias.lower() == "alias":
-            continue
-        out.append(Alias(real, alias, f"{label_prefix}#{number}"))
+        out.append(Alias(normalize(row[0]).strip(), row[1].strip(), f"{label_prefix}#{number}"))
     return out
 
 
 def write_terms(path: Path, terms: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    body = "# One term per line. Lines starting with # are comments.\n"
-    path.write_text(body + "".join(t.strip() + "\n" for t in terms if t.strip()), encoding="utf-8")
+    path.write_text(TERMS_HEADER + "\n" + "".join(t.strip() + "\n" for t in terms if t.strip()), encoding="utf-8")
 
 
-def write_aliases(path: Path, aliases: list[tuple[str, str]]) -> None:
+def write_aliases(path: Path, aliases: list[tuple[str, str] | str]) -> None:
+    """Header, then one row per alias; ``str`` entries are comment or blank lines, written as they are."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(["real", "alias"])
-        writer.writerows([(r.strip(), a.strip()) for r, a in aliases if r.strip() and a.strip()])
+        for entry in aliases:
+            if isinstance(entry, str):
+                if not _is_note(entry):
+                    raise ValueError("write_aliases: text entries must be comments or blank lines")
+                fh.write(entry.rstrip() + writer.dialect.lineterminator)
+            elif entry[0].strip() and entry[1].strip():
+                writer.writerow((entry[0].strip(), entry[1].strip()))
+
+
+# Editor round trip: the GUI shows and saves the files as written, comments and blank lines included.
+
+
+def read_terms_text(path: Path) -> str:
+    path = Path(path)
+    return "\n".join(read_text(path).splitlines()).rstrip() if path.exists() else ""
+
+
+def write_terms_text(path: Path, text: str) -> None:
+    lines = [line.rstrip() for line in text.splitlines()]
+    while lines and not lines[-1]:
+        lines.pop()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(line + "\n" for line in lines or [TERMS_HEADER]), encoding="utf-8")
+
+
+def read_aliases_text(path: Path) -> str:
+    """``aliases.csv`` as editor text: ``real ; alias`` per row, comments and blank lines verbatim."""
+    path = Path(path)
+    if not path.exists():
+        return ""
+    out = []
+    for _, line, row in _alias_rows(path):
+        if row is None:
+            if _is_note(line):
+                out.append(line.rstrip())
+        elif len(row) >= 2 and row[0].strip() and row[1].strip():
+            out.append(f"{row[0].strip()} ; {row[1].strip()}")
+        else:
+            out.append(line.rstrip())  # unusable row: shown as is, so saving asks to fix it
+    return "\n".join(out).rstrip()
+
+
+def parse_aliases_text(text: str) -> list[tuple[str, str] | str]:
+    """Editor text to ``write_aliases`` entries; raises ``ValueError`` naming only the line number."""
+    entries: list[tuple[str, str] | str] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if _is_note(line):
+            entries.append(line.rstrip())
+            continue
+        real, sep, alias = line.partition(";")
+        if not sep or not real.strip() or not alias.strip():
+            raise ValueError(f"Line {number}: use 'real value ; alias'")
+        entries.append((real.strip(), alias.strip()))
+    while entries and entries[-1] == "":
+        entries.pop()
+    return entries
