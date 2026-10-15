@@ -22,6 +22,8 @@ that pdf-toolkit did not write are never deleted or overwritten
 - **Nothing private on screen output.** CLI lines and GUI dialogs carry status, rule labels
   (`term folder#3`, `TAX_CODE_IT`), counts and redacted paths. A redacted path that still matches a
   rule is shown as `file#N`. Unexpected exceptions show their type only (`--debug` shows more).
+  The one opt-in exception is `fonts scan --show-paths`, which prints original paths for the
+  user's own terminal; without it `fonts scan` names files `file#N`.
 - **Source is never modified** (except `.redaction/` when you edit the context): tests hash the
   source tree before and after a full run.
 - **One network module.** Only `pdf_redaction/engines/stirling.py` imports networking code (a test

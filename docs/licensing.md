@@ -11,6 +11,7 @@ LGPL or AGPL distribution in the environment.
 | Dependency | Licence | Used by |
 |---|---|---|
 | pypdf | BSD-3-Clause | pdf-core (default backend) |
+| fontTools | MIT | pdf-core (decodes embedded CFF fonts for pypdf), pdf-fonts |
 | pypdfium2 / PDFium | Apache-2.0 or BSD-3-Clause / BSD-3-Clause | pdf-core `[pdfium]` extra |
 | tkinter (Python stdlib) | PSF | GUI |
 

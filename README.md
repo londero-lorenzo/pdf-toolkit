@@ -28,6 +28,7 @@ show to an assistant. See [docs/privacy-model.md](docs/privacy-model.md).
 
 ```
 packages/pdf-core        read-only PDF inspection (pypdf, optional PDFium backend)
+packages/pdf-fonts       font analysis: which fonts make text extraction unreliable
 packages/pdf-redaction   redaction library: rules, names, engines, verification, sessions, publishing
 apps/pdf-toolkit         the app: configuration, CLI, tkinter GUI, module registry
 docker/stirling          docker compose template for the local Stirling-PDF engine
@@ -67,6 +68,7 @@ review WARN files → *Publish*.
 
 ```bash
 uv run pdf-toolkit redact context  "D:/originals/2025"  --init   # creates .redaction/ in the folder
+uv run pdf-toolkit fonts scan      "D:/originals/2025"           # optional: pages to check by eye
 uv run pdf-toolkit redact new      "D:/originals/2025"  invoices-2025
 uv run pdf-toolkit redact preview-names invoices-2025            # private CSV in the workspace
 uv run pdf-toolkit redact run      invoices-2025                 # incremental; --force to redo

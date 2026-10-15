@@ -5,7 +5,7 @@ description = "Modular desktop/CLI PDF toolkit. First module: folder redaction"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["pdf-core", "pdf-redaction"]
+dependencies = ["pdf-core", "pdf-fonts", "pdf-redaction"]
 
 [project.scripts]
 pdf-toolkit = "pdf_toolkit.cli:main"
@@ -15,9 +15,11 @@ pdf-toolkit-gui = "pdf_toolkit.gui.shell:main"
 
 [project.entry-points."pdf_toolkit.modules"]
 redaction = "pdf_toolkit.redaction_module:MODULE"
+fonts = "pdf_toolkit.fonts_module:MODULE"
 
 [tool.uv.sources]
 pdf-core = { workspace = true }
+pdf-fonts = { workspace = true }
 pdf-redaction = { workspace = true }
 
 [build-system]

@@ -1,19 +1,46 @@
-"""Tiny synthetic-PDF writer for tests and demos (pure Python, no dependencies).
+"""Tiny synthetic-PDF writer for tests and demos.
 
 Only for fixtures: it lets every test build its own documents, so no real document ever has to
-be stored in the repository.
+be stored in the repository. ``make_pdf`` is pure Python; ``make_cff_pdf`` also uses fontTools.
 """
 
 from __future__ import annotations
 
 import zlib
 from collections.abc import Sequence
+from io import BytesIO
 from pathlib import Path
 
 
 def _pdf_string(text: str) -> bytes:
     raw = text.encode("cp1252", errors="replace")
     return b"(" + raw.replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)") + b")"
+
+
+def stream(entries: bytes, data: bytes) -> bytes:
+    """A stream object: ``entries`` are extra dictionary entries, /Length is added."""
+    return b"<< " + entries + b" /Length " + str(len(data)).encode() + b" >>\nstream\n" + data + b"\nendstream"
+
+
+def write_pdf(path: str | Path, objects: Sequence[bytes], *, info_id: int | None = None) -> Path:
+    """Write ``objects`` (object N is ``objects[N - 1]``, object 1 is the catalog) as a PDF file."""
+    path = Path(path)
+    out = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = []
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode()
+    trailer = f"<< /Size {len(objects) + 1} /Root 1 0 R".encode()
+    if info_id:
+        trailer += f" /Info {info_id} 0 R".encode()
+    out += b"trailer\n" + trailer + b" >>\nstartxref\n" + str(xref).encode() + b"\n%%EOF\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(bytes(out))
+    return path
 
 
 def make_pdf(
@@ -29,7 +56,6 @@ def make_pdf(
     ``image_pages`` are 1-based page numbers that receive a small grey image.
     ``info`` fills the document information dictionary (e.g. ``{"Author": "..."}``).
     """
-    path = Path(path)
     objects: list[bytes] = []
 
     def add(obj: bytes) -> int:
@@ -41,12 +67,11 @@ def make_pdf(
     font_id = add(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
     pixels = zlib.compress(bytes([128] * 16 * 16))
     image_id = add(
-        b"<< /Type /XObject /Subtype /Image /Width 16 /Height 16 /ColorSpace /DeviceGray "
-        b"/BitsPerComponent 8 /Filter /FlateDecode /Length "
-        + str(len(pixels)).encode()
-        + b" >>\nstream\n"
-        + pixels
-        + b"\nendstream"
+        stream(
+            b"/Type /XObject /Subtype /Image /Width 16 /Height 16 /ColorSpace /DeviceGray "
+            b"/BitsPerComponent 8 /Filter /FlateDecode",
+            pixels,
+        )
     )
 
     page_ids = []
@@ -59,8 +84,7 @@ def make_pdf(
         if number in image_pages:
             ops.append(b"q 64 0 0 64 460 700 cm /Im1 Do Q")
             resources += b" /XObject << /Im1 " + f"{image_id} 0 R".encode() + b" >>"
-        content = b"\n".join(ops)
-        content_id = add(b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream")
+        content_id = add(stream(b"", b"\n".join(ops)))
         page_ids.append(
             add(
                 b"<< /Type /Page /Parent " + f"{pages_id} 0 R".encode() + b" /MediaBox [0 0 595 842]"
@@ -75,20 +99,82 @@ def make_pdf(
     if info:
         entries = b" ".join(b"/" + k.encode("ascii") + b" " + _pdf_string(v) for k, v in info.items())
         info_id = add(b"<< " + entries + b" >>")
+    return write_pdf(path, objects, info_id=info_id)
 
-    out = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-    offsets = []
-    for index, obj in enumerate(objects, 1):
-        offsets.append(len(out))
-        out += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
-    xref = len(out)
-    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
-    for offset in offsets:
-        out += f"{offset:010d} 00000 n \n".encode()
-    trailer = f"<< /Size {len(objects) + 1} /Root {catalog_id} 0 R".encode()
-    if info_id:
-        trailer += f" /Info {info_id} 0 R".encode()
-    out += b"trailer\n" + trailer + b" >>\nstartxref\n" + str(xref).encode() + b"\n%%EOF\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(bytes(out))
-    return path
+
+_DIGITS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+_GLYPH_NAMES = {" ": "space", ".": "period", ",": "comma", "-": "hyphen"} | {str(d): n for d, n in enumerate(_DIGITS)}
+
+
+def cff_font_program(chars: str, *, standard_encoding: bool = False) -> tuple[bytes, dict[str, int]]:
+    """A bare CFF (Type1C) font program with one box glyph per character of ``chars``.
+
+    With ``standard_encoding`` the font uses Adobe StandardEncoding (ASCII codes for letters and
+    digits); otherwise it carries its own *custom* encoding, codes 1..N in order of appearance,
+    which a reader can only decode by parsing the font program. Returns the font data and the
+    character -> code map to write the text with.
+    """
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.t2CharStringPen import T2CharStringPen
+
+    unique = list(dict.fromkeys(chars))
+    glyphs = [".notdef"] + [_GLYPH_NAMES.get(c, c) for c in unique]
+    builder = FontBuilder(1000, isTTF=False)
+    builder.setupGlyphOrder(glyphs)
+    builder.setupCharacterMap({})
+    charstrings = {}
+    for name in glyphs:
+        pen = T2CharStringPen(500, None)
+        if name not in (".notdef", "space"):
+            pen.moveTo((50, 0))
+            pen.lineTo((450, 0))
+            pen.lineTo((450, 700))
+            pen.lineTo((50, 700))
+            pen.closePath()
+        charstrings[name] = pen.getCharString()
+    builder.setupCFF("SYNTH+TestSans", {"FullName": "Test Sans"}, charstrings, {})
+    cff = builder.font["CFF "].cff
+    if standard_encoding:
+        codes = {c: ord(c) for c in unique}
+    else:
+        codes = {c: i for i, c in enumerate(unique, 1)}
+        encoding = [".notdef"] * 256
+        for c, code in codes.items():
+            encoding[code] = _GLYPH_NAMES.get(c, c)
+        cff.topDictIndex[0].Encoding = encoding
+    out = BytesIO()
+    cff.compile(out, builder.font)
+    return out.getvalue(), codes
+
+
+def make_cff_pdf(path: str | Path, lines: Sequence[str], *, standard_encoding: bool = False) -> Path:
+    """One-page PDF written with an embedded CFF Type1 font (/FontFile3 /Subtype /Type1C) that has
+    no /ToUnicode and no /Encoding: text can only be extracted through the font's own encoding.
+
+    ``lines`` may use letters, digits, space and ``.,-``.
+    """
+    data, codes = cff_font_program("".join(lines), standard_encoding=standard_encoding)
+    first, last = min(codes.values()), max(codes.values())
+    widths = b" ".join(b"500" for _ in range(first, last + 1))
+    ops = [b"BT", b"/F1 11 Tf", b"15 TL", b"56 790 Td"]
+    for line in lines:
+        ops.append(b"<" + bytes(codes[c] for c in line).hex().encode() + b"> Tj T*")
+    ops.append(b"ET")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >>"
+        b" /Contents 4 0 R >>",
+        stream(b"", b"\n".join(ops)),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /SYNTH+TestSans /FirstChar "
+        + str(first).encode()
+        + b" /LastChar "
+        + str(last).encode()
+        + b" /Widths ["
+        + widths
+        + b"] /FontDescriptor 6 0 R >>",
+        b"<< /Type /FontDescriptor /FontName /SYNTH+TestSans /Flags 4 /FontBBox [0 0 500 700] /ItalicAngle 0"
+        b" /Ascent 700 /Descent 0 /CapHeight 700 /StemV 80 /FontFile3 7 0 R >>",
+        stream(b"/Subtype /Type1C", data),
+    ]
+    return write_pdf(path, objects)

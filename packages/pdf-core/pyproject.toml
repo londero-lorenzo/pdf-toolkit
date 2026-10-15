@@ -5,7 +5,8 @@ description = "Read-only PDF inspection shared by pdf-toolkit modules (text, ima
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["pypdf>=5.1,<7"]
+# fonttools: lets pypdf read the encoding built into embedded CFF (Type1C) fonts
+dependencies = ["pypdf>=5.1,<7", "fonttools>=4.50"]
 
 [project.optional-dependencies]
 pdfium = ["pypdfium2>=4.30"]

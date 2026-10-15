@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from pdf_core import available_backends, extract_text, inspect_pdf
-from pdf_core.testing import make_pdf
+from pdf_core.testing import make_cff_pdf, make_pdf
 
 
 @pytest.fixture
@@ -47,3 +47,24 @@ def test_extract_text_joins_pages(sample):
 def test_unknown_backend(sample):
     with pytest.raises(ValueError):
         inspect_pdf(sample, "nope")
+
+
+@pytest.fixture
+def cff_sample(tmp_path):
+    return make_cff_pdf(tmp_path / "cff.pdf", ["Holder Jane Example", "Code AB-1234"])
+
+
+@pytest.mark.parametrize("backend", available_backends())
+def test_cff_font_with_custom_encoding_is_decoded(cff_sample, backend):
+    text = extract_text(cff_sample, backend)
+    assert "Jane Example" in text
+    assert "AB-1234" in text
+
+
+def test_without_fonttools_pypdf_cannot_decode_cff_fonts(cff_sample, monkeypatch):
+    # why fonttools is a dependency: without it the custom encoding is lost and a term to find
+    # would go unnoticed
+    import pypdf.generic._font
+
+    monkeypatch.setattr(pypdf.generic._font, "HAS_FONTTOOLS", False)
+    assert "Jane Example" not in extract_text(cff_sample, "pypdf")

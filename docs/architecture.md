@@ -2,10 +2,13 @@
 
 ```
 apps/pdf-toolkit  (pdf_toolkit)        CLI, tkinter GUI, configuration, module registry
-        │ entry point "pdf_toolkit.modules"  →  redaction (built in), future: pdf2md, translate
+        │ entry point "pdf_toolkit.modules"  →  redaction, fonts (built in), future: pdf2md, translate
         ▼
 packages/pdf-redaction (pdf_redaction)  rules · names · engines · verify · session · pipeline · publish · audit
         │ entry point "pdf_toolkit.redaction_engines"  →  stirling (PDF), text (CSV/TXT/MD)
+        ▼
+packages/pdf-fonts (pdf_fonts)          font analysis: kinds, Unicode maps, embedding. Read-only today;
+        │                               font work that writes PDFs goes here, never in pdf-core
         ▼
 packages/pdf-core (pdf_core)            read-only inspection: text per page, images, annotations,
                                         forms, attachments, metadata/XMP; backends pypdf | pdfium

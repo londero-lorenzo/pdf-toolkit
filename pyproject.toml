@@ -3,7 +3,7 @@ name = "pdf-toolkit-workspace"
 version = "0.1.0"
 description = "Workspace root for pdf-toolkit (not a distributable package)"
 requires-python = ">=3.11"
-dependencies = ["pdf-core", "pdf-redaction", "pdf-toolkit"]
+dependencies = ["pdf-core", "pdf-fonts", "pdf-redaction", "pdf-toolkit"]
 
 [tool.uv]
 package = false
@@ -13,6 +13,7 @@ members = ["packages/*", "apps/*"]
 
 [tool.uv.sources]
 pdf-core = { workspace = true }
+pdf-fonts = { workspace = true }
 pdf-redaction = { workspace = true }
 pdf-toolkit = { workspace = true }
 
@@ -40,4 +41,4 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM"]
 "**/tests/**" = ["F401", "F811"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pdf_core", "pdf_redaction", "pdf_toolkit", "redaction_fixtures"]
+known-first-party = ["pdf_core", "pdf_fonts", "pdf_redaction", "pdf_toolkit", "redaction_fixtures"]
