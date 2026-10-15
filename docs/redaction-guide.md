@@ -73,6 +73,10 @@ This creates `D:/originals/2025/.redaction/` with two empty files. Edit them wit
   00999888777666555,POL-A
   ```
 
+  In file and folder names the alias is applied before everything else, so a value that is both an
+  alias and a term becomes the alias (`Contract Profile Jane Example` -> `Contract Profile client_a`).
+  In PDF contents an alias is removed like a term (the text cannot be replaced).
+
   In both files a line starting with `#` is a comment and blank lines are allowed: use them to
   group the rules. They are never redacted, and the GUI context editor shows and saves them as written.
   A `real,alias` header row in `aliases.csv` is optional and ignored; the GUI drops it when it saves.
@@ -149,7 +153,9 @@ What it does, in order:
 1. **Syncs the originals**: copies new or modified files from SOURCE, removes the copies of deleted ones.
 2. **Loads the context** (global lists + `<source>/.redaction/` + pattern packs).
 3. **Plans the names**: every folder and file name is redacted (terms, aliases, PII, codes of 6+ digits;
-   dates like `2025-12` or `20251231` are kept). Two names that become equal get `_2`, `_3`...
+   dates like `2025-12` or `20251231` are kept). Aliases go first, then terms. In names `_ - . , +`
+   count as spaces and a full name also matches with its words joined (`JaneExample`,
+   `ContractJaneExample`), but not inside an all-lowercase word. Two names that become equal get `_2`, `_3`...
 4. **Redacts each file** into `redacted/`, several at a time (`workers` in the configuration):
    - `.pdf` -> Stirling-PDF (text removal, then sanitising: metadata, attachments, scripts, links);
    - `.csv`, `.tsv`, `.txt`, `.md` -> built-in text engine;

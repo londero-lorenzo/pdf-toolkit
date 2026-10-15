@@ -4,7 +4,9 @@
 - people's names (2-3 words, no digits) also match in any word order ("Surname Name");
 - codes (one token, >= 8 alphanumerics, at least one digit) tolerate separators between characters
   ("AB 12-34/56" matches "AB123456");
-- whitespace is flexible (spaces, line breaks, non-breaking spaces).
+- whitespace is flexible (spaces, line breaks, non-breaking spaces);
+- for file names (``bounded=False``) people's names also match with the words joined
+  ("JaneExample"), and a CamelCase transition counts as a word boundary ("ContractJaneExample").
 
 The generated pattern is valid in Python and Java, so the same rule drives Stirling and our checks.
 """
@@ -20,6 +22,8 @@ from pathlib import Path
 
 # Letters and digits including Latin-1 accented letters; explicit ranges work the same in Java.
 ALNUM = "A-Za-z0-9À-ÖØ-öø-ÿ"
+LOWER = "a-zß-öø-ÿ"
+UPPER = "A-ZÀ-ÖØ-Þ"
 WS = "[\\s\\u00a0]"
 CODE_SEPARATORS = "[\\s\\u00a0.\\-/_]"
 TERMS_HEADER = "# One term per line. Lines starting with # are comments."
@@ -61,8 +65,9 @@ def is_code(term: str) -> bool:
 def term_regex(term: str, *, bounded: bool = True) -> re.Pattern:
     """Case-insensitive pattern for ``term``.
 
-    ``bounded=False`` drops the alphanumeric boundaries for codes, which is what file names need
-    (a code is often glued to a prefix: ``ABC12345678.pdf``).
+    ``bounded=False`` is what file names need: codes lose their alphanumeric boundaries (a code is
+    often glued to a prefix: ``ABC12345678.pdf``), people's names may have their words joined and
+    word terms also accept a CamelCase transition as a boundary. It is never sent to Stirling.
     """
     t = normalize(term).strip()
     if is_code(t):
@@ -72,14 +77,19 @@ def term_regex(term: str, *, bounded: bool = True) -> re.Pattern:
             return re.compile(body, re.I)
         return re.compile(f"(?<![{ALNUM}])" + body + f"(?![{ALNUM}])", re.I)
     words = t.split()
-    if 2 <= len(words) <= 3 and not any(c.isdigit() for c in t):
-        orders = list(itertools.permutations(words))
-    else:
-        orders = [tuple(words)]
-    alternatives = [(WS + "+").join(re.escape(w) for w in order) for order in orders]
+    person = 2 <= len(words) <= 3 and not any(c.isdigit() for c in t)
+    orders = list(itertools.permutations(words)) if person else [tuple(words)]
+    # names in file names may glue the words together: "JaneExample"
+    joiner = WS + ("*" if person and not bounded else "+")
+    alternatives = [joiner.join(re.escape(w) for w in order) for order in orders]
     body = "(?:" + "|".join(alternatives) + ")" if len(alternatives) > 1 else alternatives[0]
     pre = f"(?<![{ALNUM}])" if t[:1].isalnum() else ""
     post = f"(?![{ALNUM}])" if t[-1:].isalnum() else ""
+    if not bounded:
+        # a CamelCase transition is a boundary too: "ContractJaneExample" (case-sensitive check)
+        camel = f"(?<=(?-i:[{LOWER}]))(?=(?-i:[{UPPER}]))"
+        pre = f"(?:{pre}|{camel})" if pre else ""
+        post = f"(?:{post}|{camel})" if post else ""
     return re.compile(pre + body + post, re.I)
 
 

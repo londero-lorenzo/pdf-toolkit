@@ -4,6 +4,7 @@ import pytest
 
 from pdf_redaction.names import NameRedactor, SafePathMapper
 from pdf_redaction.rules.context import RedactionContext
+from pdf_redaction.rules.terms import Alias, Term
 from redaction_fixtures import PERSON, POLICY
 
 
@@ -41,6 +42,37 @@ def test_alias_in_names(ctx):
         "Customer_Profile_n.POL-A-REDACTED"
     )
     assert r.redact_component(f"ABCDE{POLICY}.pdf", keep_suffix=True) == "ABCDEPOL-A.pdf"
+
+
+@pytest.fixture
+def person_alias():
+    # the same person as an alias and as a term, plus a term for the surname alone
+    return RedactionContext(
+        aliases=[Alias(PERSON.lower(), "client_a", "folder-alias#2")],
+        terms=[Term(PERSON, "folder#2"), Term("Example", "folder#3")],
+    )
+
+
+@pytest.mark.parametrize(
+    ("original", "expected"),
+    [
+        (f"Contract Profile {PERSON}", "Contract Profile client_a"),
+        ("Contract_Profile_Example_Jane", "Contract_Profile_client_a"),
+        ("Contract.Profile.Jane.Example", "Contract.Profile.client_a"),
+        ("Example, Jane - notes", "client_a - notes"),
+        ("JaneExample", "client_a"),
+        ("ContractJaneExample", "Contractclient_a"),
+        ("JANEEXAMPLE_2025-12", "client_a_2025-12"),
+        ("Jane Example_123456789", "client_a_REDACTED"),
+        ("Example notes", "REDACTED notes"),
+        ("contractjaneexample", "contractjaneexample"),
+    ],
+)
+def test_alias_wins_over_terms_and_matches_variants(person_alias, original, expected):
+    r = NameRedactor(person_alias)
+    out = r.redact_component(original, keep_suffix=False)
+    assert out == expected
+    assert r.findings(out) == []
 
 
 def test_mapper_collisions_and_stability(no_alias):

@@ -41,6 +41,18 @@ def test_code_unbounded_for_names():
     assert term_regex(POLICY, bounded=False).search(f"ABCDE{POLICY}")
 
 
+@pytest.mark.parametrize("text", ["JaneExample", "ExampleJane", "JANEEXAMPLE", "ContractJaneExample", "JaneExampleCv"])
+def test_name_joined_or_camel_case_in_file_names(text):
+    assert term_regex(PERSON, bounded=False).search(text)
+    assert not term_regex(PERSON).search(text)  # contents and Stirling keep the strict rule
+
+
+@pytest.mark.parametrize("text", ["contractjaneexample", "Planjane example", "PlannLeeway"])
+def test_name_unbounded_still_needs_a_boundary(text):
+    assert not term_regex(PERSON, bounded=False).search(text)
+    assert not term_regex("Ann Lee", bounded=False).search(text)
+
+
 def test_patterns_it_pack():
     names = {p.name for p in get_patterns(["common", "it"])}
     assert {"EMAIL", "IBAN", "TAX_CODE_IT", "IBAN_IT", "MOBILE_PHONE_IT"} <= names

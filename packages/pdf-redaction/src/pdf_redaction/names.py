@@ -1,15 +1,17 @@
 """Redact file and folder names, one path component at a time.
 
 Rules, in order, for each component (the extension of the last component is kept):
-1. aliases: real value -> alias;
+1. aliases: real value -> alias. They go first: the later rules never see (or override) them;
 2. terms -> placeholder;
 3. names only: any alphanumeric token holding 6 or more digits -> placeholder, unless the token is
    a valid date ``YYYYMMDD`` (``YYYY-MM`` and ``YYYY-MM-DD`` never reach 6 digits in one token);
 4. built-in PII patterns -> placeholder;
 5. clean-up: invalid Windows characters removed, separators collapsed, reserved names avoided.
 
-Matching runs on a "view" of the component where ``_`` and ``-`` count as spaces, so
-``Jane_Example`` and ``Example-Jane`` match the term ``Jane Example``.
+Matching runs on two "views" of the component: one where ``_`` and ``-`` count as spaces and one
+where ``.``, ``,`` and ``+`` do too, so ``Jane_Example``, ``Example-Jane``, ``Jane.Example`` and
+``Example, Jane`` match the term ``Jane Example`` (the first view keeps terms holding dots working).
+With ``term_regex(bounded=False)`` ``JaneExample`` and ``ContractJaneExample`` match as well.
 Collisions inside the same folder get ``_2``, ``_3``... (``SafePathMapper``).
 """
 
@@ -24,14 +26,18 @@ from pdf_redaction.rules.patterns import Strength
 from pdf_redaction.rules.terms import normalize
 
 NAME_PLACEHOLDER = "REDACTED"
-_SEPARATORS = " ._-"
+_SEPARATORS = " ._-,+"
 _TOKEN = re.compile(r"[A-Za-z0-9]+")
 _INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+# one character per character, so spans in a view are spans in the component
+_VIEWS = (str.maketrans("_-", "  "), str.maketrans("_-.,+", "     "))
+# private-use characters standing for an alias while the later rules run: not alphanumeric, not \w
+_SENTINEL = 0xE000
 
 
-def _view(component: str) -> str:
-    return component.replace("_", " ").replace("-", " ")
+def _views(component: str) -> list[str]:
+    return list(dict.fromkeys(component.translate(t) for t in _VIEWS))
 
 
 def _is_date_token(token: str) -> bool:
@@ -54,7 +60,7 @@ def long_digit_tokens(component: str) -> list[re.Match]:
 
 def _replace_spans(text: str, spans: list[tuple[int, int, str]]) -> str:
     out, last = [], 0
-    for start, end, repl in sorted(spans):
+    for start, end, repl in sorted(spans, key=lambda s: (s[0], -s[1])):  # same start: longest first
         if start < last:  # overlapping hit already covered
             continue
         out.append(text[last:start])
@@ -78,26 +84,26 @@ def _clean(name: str, placeholder: str) -> str:
 class NameRedactor:
     def __init__(self, ctx: RedactionContext, placeholder: str = NAME_PLACEHOLDER):
         self.placeholder = placeholder
-        # bounded=False only relaxes code-like rules: word terms keep their boundaries
+        # bounded=False: codes glued to text, joined names and CamelCase boundaries (term_regex)
         self.matchers: list[Matcher] = ctx.matchers(bounded=False)
 
     def _hits(self, stem: str, kinds: tuple[str, ...]) -> list[tuple[int, int, str, Matcher]]:
-        view = _view(normalize(stem))
-        hits = []
-        for m in self.matchers:
-            if m.kind not in kinds:
-                continue
-            repl = m.replacement if m.kind == "alias" else self.placeholder
-            for x in m.regex.finditer(view):
-                start, end = x.start(), x.end()
-                # keep the separators around a hit ("123456789-Name" -> "REDACTED-Name")
-                while start < end and view[start] in _SEPARATORS:
-                    start += 1
-                while end > start and view[end - 1] in _SEPARATORS:
-                    end -= 1
-                if start < end:
-                    hits.append((start, end, repl, m))
-        return hits
+        hits = {}
+        for view in _views(normalize(stem)):
+            for m in self.matchers:
+                if m.kind not in kinds:
+                    continue
+                repl = m.replacement if m.kind == "alias" else self.placeholder
+                for x in m.regex.finditer(view):
+                    start, end = x.start(), x.end()
+                    # keep the separators around a hit ("123456789-Name" -> "REDACTED-Name")
+                    while start < end and view[start] in _SEPARATORS:
+                        start += 1
+                    while end > start and view[end - 1] in _SEPARATORS:
+                        end -= 1
+                    if start < end:
+                        hits.setdefault((start, end, m.label), (start, end, repl, m))
+        return list(hits.values())
 
     def redact_component(self, component: str, *, keep_suffix: bool) -> str:
         component = normalize(component)
@@ -107,10 +113,16 @@ class NameRedactor:
             p = PurePosixPath(component)
             if p.suffix and len(p.suffix) <= 6 and p.suffix[1:].isalnum():
                 suffix, stem = p.suffix, component[: -len(p.suffix)]
-        # 1. aliases and terms, 2. tokens with many digits (whole token), 3. PII patterns
-        stem = _replace_spans(stem, [(s, e, r) for s, e, r, _ in self._hits(stem, ("alias", "term"))])
+        # 1. aliases, held by a sentinel so the next rules cannot touch them, 2. terms,
+        # 3. tokens with many digits (whole token), 4. PII patterns
+        alias_hits = self._hits(stem, ("alias",))
+        sentinel = {a: chr(_SENTINEL + i) for i, a in enumerate(dict.fromkeys(r for _, _, r, _ in alias_hits))}
+        stem = _replace_spans(stem, [(s, e, sentinel[r]) for s, e, r, _ in alias_hits])
+        stem = _replace_spans(stem, [(s, e, r) for s, e, r, _ in self._hits(stem, ("term",))])
         stem = _replace_spans(stem, [(m.start(), m.end(), self.placeholder) for m in long_digit_tokens(stem)])
         stem = _replace_spans(stem, [(s, e, r) for s, e, r, _ in self._hits(stem, ("pattern",))])
+        for alias, char in sentinel.items():
+            stem = stem.replace(char, alias)
         return _clean(stem, self.placeholder) + suffix
 
     def findings(self, component: str) -> list[tuple[str, Strength]]:
