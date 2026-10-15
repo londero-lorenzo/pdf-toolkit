@@ -17,8 +17,9 @@ from pdf_core import inspect_pdf
 from pdf_core.testing import make_pdf
 from pdf_redaction.engines.base import EngineResult
 from pdf_redaction.engines.text import TextEngine
+from pdf_redaction.manual import rule_digests
 from pdf_redaction.rules.context import RedactionContext, context_dir
-from pdf_redaction.rules.java_regex import to_python, unsupported_by_stirling
+from pdf_redaction.rules.java_regex import to_java_patterns, to_python, unsupported_by_stirling
 from pdf_redaction.rules.terms import write_aliases, write_terms
 from pdf_redaction.textredact import TextRedactor
 
@@ -37,9 +38,14 @@ class ReferenceEngine:
 
     def __init__(self, settings=None):
         self.calls = 0
+        self.sources: list[Path] = []
+
+    def rule_digests(self, ctx: RedactionContext) -> frozenset[str]:
+        return rule_digests(to_java_patterns(ctx))
 
     def redact(self, src: Path, dst: Path, ctx: RedactionContext) -> EngineResult:
         self.calls += 1
+        self.sources.append(Path(src))
         redactor = TextRedactor(ctx)
         pages = [[redactor.apply(line) for line in (p.extract_text() or "").splitlines()] for p in PdfReader(src).pages]
         make_pdf(dst, pages, image_pages=inspect_pdf(src).image_pages)

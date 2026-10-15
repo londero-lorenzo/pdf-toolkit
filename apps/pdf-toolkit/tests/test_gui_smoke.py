@@ -1,5 +1,6 @@
 """The GUI builds, opens a session, runs it and shows results (skipped without a display)."""
 
+import gc
 import time
 
 import pytest
@@ -20,6 +21,8 @@ def root():
     r.withdraw()
     yield r
     r.destroy()
+    del r
+    gc.collect()  # free Tk objects here, in the main thread, not later inside a worker thread
 
 
 def wait_idle(tab, timeout=30):
@@ -69,3 +72,29 @@ def test_context_editor_keeps_comments(root, config, source):
     assert reopened.terms.get("1.0", "end-1c") == terms
     assert reopened.aliases.get("1.0", "end-1c") == aliases
     reopened.destroy()
+
+
+def test_manual_edits_are_marked_and_can_be_discarded(root, config, source):
+    from pdf_core.testing import make_pdf
+    from pdf_toolkit.gui.redaction import RedactionTab
+
+    cfg = AppConfig.load(config)
+    session = svc.create_session(cfg, source, "gui-manual")
+    tab = RedactionTab(root, cfg)
+    tab.open_session("gui-manual")
+    wait_idle(tab)
+    tab.run()
+    wait_idle(tab)
+    statement = "Customer_Profile_n.POL-A-REDACTED/statement_2025-12.pdf"
+    make_pdf(session.redacted_dir / statement, [["[BOX DRAWN BY HAND]"]])
+    tab.verify()
+    wait_idle(tab)
+    rows = {tab.tree.set(i, "path"): i for i in tab.tree.get_children()}
+    assert svc.MANUAL_PENDING in tab.tree.set(rows[statement], "details")
+    tab.run()
+    wait_idle(tab)
+    rows = {tab.tree.set(i, "path"): i for i in tab.tree.get_children()}
+    assert svc.MANUAL_KEPT in tab.tree.set(rows[statement], "details")
+    tab.tree.selection_set(rows[statement])
+    tab.discard_manual(confirm=False)
+    assert "1 manual edit(s) discarded" in tab.summary.cget("text")

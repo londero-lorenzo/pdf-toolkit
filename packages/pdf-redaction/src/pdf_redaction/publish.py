@@ -2,8 +2,8 @@
 
 A file is published when, verified again right now with the current context, it is OK, or WARN
 and marked as reviewed. FAIL files, files processed with an older context or from an older version
-of the original, and unsupported files are never published. For PDFs a plain-text extract
-is written to ``_text/<path>.txt`` and verified as well.
+of the original, files edited by hand since the last run, and unsupported files are never
+published. For PDFs a plain-text extract is written to ``_text/<path>.txt`` and verified as well.
 
 The destination is the exact folder the files go into (no alias sub-folder) and is remembered in
 the session. It holds ``.published.json``: the alias that owns the folder and the list of files it
@@ -30,6 +30,8 @@ PUBLISHED_FILE = ".published.json"
 PUBLISHED_SCHEMA = 2
 TEXT_DIR = "_text"
 FOREIGN_REASON = "a file not written by pdf-toolkit is in the way"
+# a manual edit must go through a run (sanitize, rules on top, verify) before it is shared
+EDITED_REASON = "edited after the last run: run Redact + verify first"
 
 
 @dataclass
@@ -106,6 +108,9 @@ def publish(
             continue
         if entry.context_fingerprint != fingerprint:
             report.blocked.append((rel, "rules changed since it was redacted: run again"))
+            continue
+        if ledger.edited_after_run(entry.original, session.redacted_dir):
+            report.blocked.append((rel, EDITED_REASON))
             continue
         verdict = verify_file(src, PurePosixPath(rel), ctx)
         report.verdicts.append(verdict)

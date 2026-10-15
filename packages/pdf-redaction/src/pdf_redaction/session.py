@@ -7,8 +7,11 @@ Workspace layout::
       manifest.json     relative path, size and SHA-256 of every copied original
       originals/        byte-for-byte copy of the source (the ``.redaction`` folder excluded)
       redacted/         engine output, with redacted names
-      ledger.csv        what was processed, with which context and engine
+      ledger.csv        what was processed, with which context and engine, and the SHA-256 of the output
       review.json       redacted paths a human has reviewed, with the SHA-256 of what was seen
+      manual/           redacted files edited by hand after a run, by original path (see ``manual``)
+      manual.json       those edits: original they came from, rules already applied, stale or not
+      rulesets.json     digests of the rules of each context fingerprint, per engine
       logs/
 
 The workspace contains unredacted data: it must live in a private location, never inside a
@@ -80,6 +83,18 @@ class Session:
     @property
     def review_path(self) -> Path:
         return self.workspace / "review.json"
+
+    @property
+    def manual_dir(self) -> Path:
+        return self.workspace / "manual"
+
+    @property
+    def manual_path(self) -> Path:
+        return self.workspace / "manual.json"
+
+    @property
+    def rulesets_path(self) -> Path:
+        return self.workspace / "rulesets.json"
 
     @property
     def logs_dir(self) -> Path:

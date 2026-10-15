@@ -4,6 +4,7 @@ import hashlib
 
 import pytest
 
+from pdf_core.testing import make_pdf
 from pdf_redaction.rules.context import context_dir
 from pdf_redaction.rules.terms import write_terms
 from pdf_toolkit.cli import main
@@ -155,3 +156,21 @@ def test_publish_hides_paths_that_match_new_rules(config, source, capsys):
     assert cli(config, "redact", "publish", "sample-2025") == 2  # rules changed: everything held back
     out = capsys.readouterr().out
     assert "HOLD file#" in out and "movements" not in out
+
+
+def test_manual_edits_are_reported_without_names(tmp_path, config, source, capsys):
+    statement = "Customer_Profile_n.POL-A-REDACTED/statement_2025-12.pdf"
+    assert cli(config, "redact", "new", str(source), "sample-2025") == 0
+    assert cli(config, "redact", "run", "sample-2025") == 2
+    make_pdf(tmp_path / "private" / "workspaces" / "sample-2025" / "redacted" / statement, [["[BOX DRAWN BY HAND]"]])
+    assert cli(config, "redact", "verify", "sample-2025") == 2
+    write_terms(context_dir(source) / "terms.txt", [PERSON, "Holder"])
+    assert cli(config, "redact", "run", "sample-2025") == 2
+    assert cli(config, "redact", "reset-manual", "sample-2025", "missing.pdf") == 1
+    assert cli(config, "redact", "reset-manual", "sample-2025", statement) == 0
+    out = capsys.readouterr()
+    assert_clean(out.out + out.err)
+    assert f"{statement} [edited by hand: run Redact + verify to keep it]" in out.out
+    assert f"{statement} [manual edits kept]" in out.out
+    assert "manual edits: 1 found since the last run, 1 files rebuilt on top of them" in out.out
+    assert "1 manual edit(s) discarded" in out.out

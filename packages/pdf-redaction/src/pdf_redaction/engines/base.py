@@ -8,6 +8,11 @@ license) by declaring, in their ``pyproject.toml``::
 
 An engine class is built with ``Engine(settings: dict)`` where ``settings`` is the engine's table
 from the app configuration (``[engines.<name>]``).
+
+An engine may also implement ``rule_digests(ctx) -> frozenset[str]``: one digest per effective rule
+it applies (``pdf_redaction.manual.rule_digests``). It must be safe to call ``redact`` on its own
+output with a superset of the rules. With it, a redacted file edited by hand becomes the base of
+later runs as long as rules are only added; without it, such an edit is dropped (see ``manual``).
 """
 
 from __future__ import annotations
