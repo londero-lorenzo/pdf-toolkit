@@ -137,6 +137,33 @@ uv run pdf-toolkit redact preview-names invoices-2025
 Writes `preview_names.csv` (original name; redacted name) **in the workspace** so you can check the
 renaming before running. It prints only counts. Open the CSV yourself: it contains real names.
 
+## Optional: `fonts scan` - find pages the checks cannot read
+
+```
+uv run pdf-toolkit fonts scan PATH... [--csv FILE]
+```
+
+The verification can only find what the text extractors can read. Some fonts store no mapping
+from their codes to letters (Type0 "Identity" or Type3 fonts without a `/ToUnicode` map): their
+text comes out as garbage, so a name written with them would go unnoticed. `fonts scan` lists
+such files without modifying anything:
+
+```
+fontTools: installed
+OK   file#1: 4 fonts
+NOTE file#2: 3 fonts; 1 CFF with its own encoding (p1-3): decoded through fontTools
+RISK file#3: 2 fonts; 2 without Unicode map (p2): extracted text unreliable, check visually
+--- 3 files: 1 OK, 1 NOTE, 1 RISK
+```
+
+- `RISK`: look at the listed pages yourself after `run`, as you would for a scanned page.
+- `NOTE`: nothing to do. A CFF font with its own encoding is decoded through fontTools (this is
+  what the pypdf message "fontTools is required to fully parse the encoding of a CFF Type1 font"
+  was about).
+
+Files are named `file#N`; `--csv FILE` writes the matching paths to a private report (refused
+inside a protected location).
+
 ## Step 4: `redact run` - redact and verify
 
 ```
@@ -341,6 +368,7 @@ note: destination changed; the previous one was left as it was: E:/to-share (14 
 ```bash
 uv run pdf-toolkit redact context "D:/originals/2025" --init   # once: create .redaction/
 # ... edit .redaction/terms.txt and aliases.csv ...
+uv run pdf-toolkit fonts scan "D:/originals/2025"              # optional: pages to check by eye
 uv run pdf-toolkit redact new "D:/originals/2025" invoices-2025 # once: create the session
 uv run pdf-toolkit redact preview-names invoices-2025           # optional: check new names
 uv run pdf-toolkit redact run invoices-2025                     # every time something changed
