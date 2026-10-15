@@ -17,7 +17,7 @@ D:/originals/2025/                       <workspace_root>/invoices-2025/
   ...                                      preview_names.csv (only after "preview-names")
 
 OUTPUT folder (shareable, filled by "publish")
-<output_root>/invoices-2025/ ...
+the destination you give with --to, e.g. E:/to-share/ (default: <output_root>/invoices-2025/)
 ```
 
 | Place | Who writes it | Contains real data? |
@@ -29,7 +29,9 @@ OUTPUT folder (shareable, filled by "publish")
 
 The workspace and the output folder must not be inside the source, and the workspace must not be
 inside `output_root` or any `protected_locations` (synced or shared folders): pdf-toolkit refuses
-otherwise.
+otherwise. The output folder is chosen when you publish; it must not contain or be inside the
+source, the workspace or `workspace_root`. `protected_locations` do not apply to it: it only
+receives verified files.
 
 ## Before the first session
 
@@ -39,7 +41,7 @@ otherwise.
    [redaction]
    pattern_packs = ["common", "it"]          # built-in PII rules: e-mail, IBAN, tax codes...
    workspace_root = "D:/private/workspaces"  # where "new" creates workspaces
-   output_root = "D:/share/redacted"         # where "publish" writes
+   output_root = "D:/share/redacted"         # optional: default for "publish" (<output_root>/<alias>)
    protected_locations = ["C:/Users/me/OneDrive"]
 
    [engines.stirling]
@@ -93,7 +95,7 @@ uv run pdf-toolkit redact new SOURCE ALIAS [--workspace FOLDER]
 | Argument | Meaning |
 |---|---|
 | `SOURCE` | the folder of originals. It is only read. Sub-folders are included. |
-| `ALIAS` | a **public** short name for this session: 1-64 letters, digits, `.`, `_`, `-`, starting with a letter or digit. It names the workspace (`<workspace_root>/<ALIAS>`) and the published folder (`<output_root>/<ALIAS>/`), so it must not contain anything personal: pdf-toolkit refuses an alias that matches a redaction rule. Examples: `invoices-2025`, `contracts_q3`. |
+| `ALIAS` | a **public** short name for this session: 1-64 letters, digits, `.`, `_`, `-`, starting with a letter or digit. It names the workspace (`<workspace_root>/<ALIAS>`) and the default publish folder (`<output_root>/<ALIAS>/`), so it must not contain anything personal: pdf-toolkit refuses an alias that matches a redaction rule. Examples: `invoices-2025`, `contracts_q3`. |
 | `--workspace FOLDER` | optional: put the workspace somewhere else than `<workspace_root>/<ALIAS>`. Needed only if `workspace_root` is not configured. |
 
 What it does:
@@ -243,7 +245,7 @@ a rule, so it is a FAIL anyway.
 ## Step 6: `redact publish` - copy the safe files out
 
 ```
-uv run pdf-toolkit redact publish SESSION [--output FOLDER]
+uv run pdf-toolkit redact publish SESSION [--to FOLDER]
 ```
 
 **Why it exists.** The workspace is private: it contains the originals. `publish` is the only step
@@ -253,7 +255,10 @@ files that pass the checks *at that moment*.
 | Argument | Meaning |
 |---|---|
 | `SESSION` | as for `run` |
-| `--output FOLDER` | write to `FOLDER/<ALIAS>/` instead of `<output_root>/<ALIAS>/` (must be outside the source and the workspace) |
+| `--to FOLDER` | publish **exactly** into `FOLDER` (no `<ALIAS>` sub-folder) and remember it for this session. Without it: the destination used last time, else `<output_root>/<ALIAS>` if `output_root` is set, else an error. It must not contain or be inside the source, the workspace or `workspace_root`. |
+
+The GUI asks for the destination in the Publish step (pre-filled with the one above, "Browse..." to
+change it). Design notes: `docs/decisions/0001-publish-destination.md`.
 
 What it does, for every file of the session:
 
@@ -270,22 +275,27 @@ What it does, for every file of the session:
 Result:
 
 ```
-<output_root>/invoices-2025/
+<destination>/
   statements/statement_2025-12.pdf
   movements.csv
   ABCDEPOL-A.pdf                         (only once reviewed)
   _text/statements/statement_2025-12.pdf.txt
   _text/ABCDEPOL-A.pdf.txt
-  .published.json                        list of files written by this session
+  .published.json                        owner (the alias) and list of files written by this session
 ```
 
 Output on the console:
 
 ```
+destination (--to): E:/to-share
 HOLD ABCDEPOL-A.pdf: WARN: mark it as reviewed first
 HOLD file#2: verification FAIL
 2 published, 2 held back, 0 stale removed
 ```
+
+`destination (...)` says where the folder came from: `--to`, `last used` or `output_root/<alias>`.
+The folder path is printed unless a part of it matches a redaction rule; then it reads
+`(folder hidden: its path matches a redaction rule)`.
 
 As in `run`, `file#N` replaces a path that still matches a rule, and no file content is printed.
 
@@ -297,14 +307,24 @@ As in `run`, `file#N` replaces a path that still matches a rule, and no file con
 | `source changed since it was redacted: run again` | `redact run SESSION` (if it shows `ERR` for the file, see Step 4) |
 | `not redacted yet` | the redacted file is missing from the workspace: `redact run SESSION` |
 | `text extract FAIL` | the PDF passed but its text extract did not: treat it like a FAIL |
+| `a file not written by pdf-toolkit is in the way` | the destination already has a file with that name: rename or move it, or publish elsewhere (it is never overwritten) |
 
 Exit code: `0` everything published, `2` something held back.
 
 You can publish **as often as you like**. Each time the output folder is brought in line with the
 session: changed files are overwritten, and files this session published earlier that no longer
 qualify (deleted from the source, now FAIL, review undone) are **removed**. Files that are in the
-same folder but were not written by `publish` are left alone. So do not edit files inside the
-output folder: copy them elsewhere first.
+same folder but were not written by `publish` are never deleted or overwritten (`note: the
+destination holds N file(s) not written by pdf-toolkit: left untouched`). A folder published by
+another session is refused. So do not edit files that `publish` wrote: copy them elsewhere first.
+
+**Changing the destination.** Publish with another `--to` and the session remembers the new
+folder. The old one is left exactly as it was, and the console tells you where it is and how many
+files were published there, so you can remove them yourself:
+
+```
+note: destination changed; the previous one was left as it was: E:/to-share (14 file(s) published there)
+```
 
 ## Cheat sheet
 
@@ -315,5 +335,6 @@ uv run pdf-toolkit redact new "D:/originals/2025" invoices-2025 # once: create t
 uv run pdf-toolkit redact preview-names invoices-2025           # optional: check new names
 uv run pdf-toolkit redact run invoices-2025                     # every time something changed
 uv run pdf-toolkit redact review invoices-2025 "scan.pdf"       # after looking at a WARN file
-uv run pdf-toolkit redact publish invoices-2025                 # copy OK and reviewed files out
+uv run pdf-toolkit redact publish invoices-2025 --to "E:/to-share"  # copy OK and reviewed files out
+uv run pdf-toolkit redact publish invoices-2025                 # again: same destination as last time
 ```

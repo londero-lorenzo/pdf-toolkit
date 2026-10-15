@@ -49,7 +49,7 @@ uv sync
 docker compose up -d                       # then create an API key in Stirling's account settings
 # 2. configuration (outside the repository)
 uv run pdf-toolkit config init             # writes %APPDATA%/pdf-toolkit/config.toml (or ~/.config/...)
-uv run pdf-toolkit config edit             # set workspace_root, output_root, api_key_file...
+uv run pdf-toolkit config edit             # set workspace_root, api_key_file... (output_root is an optional default)
 uv run pdf-toolkit config check
 uv run pdf-toolkit redact stirling-status
 ```

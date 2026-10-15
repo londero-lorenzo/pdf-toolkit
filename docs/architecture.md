@@ -32,7 +32,8 @@ source (read only) ──copy──► workspace/originals ──SafePathMapper�
                               workspace/redacted ──verify (pypdf + PDFium)──► OK / WARN / FAIL
                                      │                                      ledger.csv
                                      ▼  publish: re-verify, reviewed WARN only
-                              output_root/<alias>/  (+ _text/*.txt extracts, .published.json)
+                              destination folder    (+ _text/*.txt extracts, .published.json)
+                              (--to FOLDER, remembered per session; default output_root/<alias>)
 ```
 
 ## Rules

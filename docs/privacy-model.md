@@ -6,12 +6,16 @@
 |---|---|---|
 | **Source folder** | original documents + `.redaction/` (the folder context) | you only. pdf-toolkit only reads it (writes `.redaction/` when you edit the context) |
 | **Workspace** (`workspace_root/<alias>`) | copy of the originals, redacted output, ledger, review marks, name preview | you only. Must not be inside a *protected location* |
-| **Output** (`output_root/<alias>`) | verified files + text extracts | whoever you share it with |
+| **Output** (the publish destination: `--to FOLDER`, else `output_root/<alias>`) | verified files + text extracts | whoever you share it with |
 | **Configuration** (`%APPDATA%/pdf-toolkit/config.toml`) | paths to your global term/alias lists, API key file | you only |
 
 *Protected locations* are folders where unredacted data must never land: synced or shared
 folders, the working directory of an AI assistant, a repository. The output root is protected
-automatically. pdf-toolkit refuses to create a workspace inside one of them.
+automatically. pdf-toolkit refuses to create a workspace inside one of them. They do not apply
+to publish destinations: those receive only verified files and are often shared folders. A
+destination must only be disjoint from the source, the workspace and `workspace_root`; files in it
+that pdf-toolkit did not write are never deleted or overwritten
+(see `docs/decisions/0001-publish-destination.md`).
 
 ## Guarantees (each one is covered by tests)
 
