@@ -203,7 +203,8 @@ It is **incremental**: a file is skipped (counted as `unchanged`, but verified a
 original, the rules and the engine settings are the same as last time. Change `terms.txt`
 and the next `run` redoes everything, printing `note: rules changed since the last run`.
 Use `--force` only when something pdf-toolkit cannot see has changed, for example after upgrading
-Stirling-PDF, or if you edited files inside `redacted/` by hand.
+Stirling-PDF. Files you edited by hand inside `redacted/` are detected on their own (see
+[Manual edits](#manual-edits-boxes-drawn-by-hand)).
 
 ### Reading the output
 
@@ -246,6 +247,53 @@ Exit code: `0` all OK, `2` some WARN, `1` any FAIL or error.
 `uv run pdf-toolkit redact verify SESSION` repeats only the checks (no copy, no redaction) and
 prints the same lines: useful after you changed something by hand.
 
+### Manual edits (boxes drawn by hand)
+
+Some things are not text rules: headers, footers, logos, a name inside a picture. You can cover
+them by hand in the redacted file: open `<workspace>/redacted/<PATH>` (in the GUI, double-click the
+row), draw the boxes, for example with Stirling-PDF's manual redaction, apply them and **save over
+the same file**.
+
+pdf-toolkit notices that the file is no longer the one the last `run` wrote (it keeps its SHA-256 in
+`ledger.csv`):
+
+- `verify` (or *Verify again*) marks the line `[edited by hand: run Redact + verify to keep it]`, and
+  `publish` holds the file back with `edited after the last run: run Redact + verify first`.
+- The next `run` copies your edit to `<workspace>/manual/` and from then on uses it as the **base**
+  of that file: the rules are applied on top of it, Stirling sanitises it and it is verified again.
+  The line ends with `[manual edits kept]` and the run prints for example
+  `manual edits: 1 found since the last run, 1 files rebuilt on top of them`.
+
+So you can keep adding terms and aliases while you review: each `run` applies the new rules **on top
+of your boxes**, and you never draw them twice.
+
+An edit is dropped, and the file redone from the original, in these cases (the line says
+`[manual edits dropped: <reason>]`):
+
+| Reason | When |
+|---|---|
+| `rules removed` | a term, alias or pattern that had already been applied before your edit is no longer in the context. Keeping the edit would keep that rule's redactions, and you removed it on purpose. |
+| `original changed` | the file in SOURCE changed: your boxes belong to the previous version. |
+| `engine cannot rebuild on top of it` | text and CSV files: their engine redoes them from the original. |
+
+A dropped edit stays in `manual/` until you edit the file again, so you can open it and see where
+the boxes were. To start over on purpose:
+
+```
+uv run pdf-toolkit redact reset-manual SESSION [PATH ...]
+```
+
+(no `PATH`: every file). In the GUI, select the rows and press *Discard manual edits*.
+
+Two limits to keep in mind:
+
+- The checks read text and rules. They cannot tell whether what was under *your* box (a logo, a
+  header that is not a term) was really removed or only covered: that depends on the tool you drew
+  the box with. Before you `review` the file, try to select or copy the text under a box: if you
+  can, it is still there.
+- A review mark is tied to the file's content: after a `run` rebuilds the file on your edit, review
+  it again.
+
 ## Step 5: `redact review` - confirm the WARN files yourself
 
 ```
@@ -275,9 +323,10 @@ How to do it:
    - **Nothing personal**: `uv run pdf-toolkit redact review invoices-2025 "ABCDEPOL-A.pdf"`.
      Output: `1 file(s) marked as reviewed`. From now on `run` and `verify` print
      `WARN ABCDEPOL-A.pdf (reviewed): images on p1`.
-   - **Something personal in an image**: do not review it. Text rules cannot remove it, because
-     it is not text. Leave the file out of the source, or replace it with a version where the image
-     is covered, then `run` again.
+   - **Something personal in an image**, or in a header, footer or logo: do not review it yet.
+     Text rules cannot remove it. Cover it by hand in `redacted/<PATH>` (for example with
+     Stirling-PDF's manual redaction, saving over the file), then `run` again: see
+     [Manual edits](#manual-edits-boxes-drawn-by-hand).
    - **A weak hit that is personal**: add it to `terms.txt` or `aliases.csv`, then `run`.
 
 The mark is tied to the **content** of the redacted file, not just to its name: if a later `run`
@@ -383,6 +432,7 @@ uv run pdf-toolkit redact new "D:/originals/2025" invoices-2025 # once: create t
 uv run pdf-toolkit redact preview-names invoices-2025           # optional: check new names
 uv run pdf-toolkit redact run invoices-2025                     # every time something changed
 uv run pdf-toolkit redact review invoices-2025 "scan.pdf"       # after looking at a WARN file
+uv run pdf-toolkit redact reset-manual invoices-2025 "scan.pdf" # forget boxes drawn by hand in it
 uv run pdf-toolkit redact publish invoices-2025 --to "E:/to-share"  # copy OK and reviewed files out
 uv run pdf-toolkit redact publish invoices-2025                 # again: same destination as last time
 ```
