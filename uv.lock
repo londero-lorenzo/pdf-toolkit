@@ -159,12 +159,14 @@ version = "0.1.0"
 source = { editable = "apps/pdf-toolkit" }
 dependencies = [
     { name = "pdf-core" },
+    { name = "pdf-fonts" },
     { name = "pdf-redaction" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "pdf-core", editable = "packages/pdf-core" },
+    { name = "pdf-fonts", editable = "packages/pdf-fonts" },
     { name = "pdf-redaction", editable = "packages/pdf-redaction" },
 ]
 

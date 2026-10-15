@@ -1,6 +1,5 @@
-from pdf_fonts import FontIssue, FontKind, fonttools_available, scan_fonts
-
 from pdf_core.testing import make_cff_pdf, make_pdf, stream, write_pdf
+from pdf_fonts import FontIssue, FontKind, fonttools_available, scan_fonts
 
 
 class Doc:
