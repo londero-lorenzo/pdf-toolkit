@@ -1,6 +1,6 @@
 # pdf-toolkit: rules for AI assistants and contributors
 
-Public MIT repository. Language: **English** for code, comments, docs, commit messages.
+Public Apache-2.0 repository. Language: **English** for code, comments, docs, commit messages.
 
 ## Data
 - **Synthetic data only.** Tests and examples build their own documents with
@@ -17,7 +17,8 @@ Public MIT repository. Language: **English** for code, comments, docs, commit me
 - Networking code is allowed only in `packages/pdf-redaction/src/pdf_redaction/engines/stirling.py`,
   and only towards loopback addresses (`tests/test_network_boundary.py` enforces it).
 - `pdf-core` never modifies a PDF.
-- Dependencies: permissive licences only (`scripts/check_licenses.py`). Copyleft libraries go in
+- Dependencies: permissive licences only (`scripts/check_licenses.py`); LGPL only when listed by
+  name there (`docs/decisions/0004-apache-2.0-licence.md`). GPL and AGPL libraries go in
   separate optional packages that use the entry points.
 - Regexes in `rules/` must work in both Python and Java (they are sent to Stirling-PDF).
 

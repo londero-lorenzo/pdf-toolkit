@@ -3,7 +3,7 @@ name = "pdf-core"
 version = "0.1.0"
 description = "Read-only PDF inspection shared by pdf-toolkit modules (text, images, metadata, forms, attachments)"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 # fonttools: lets pypdf read the encoding built into embedded CFF (Type1C) fonts
 dependencies = ["pypdf>=5.1,<7", "fonttools>=4.50"]

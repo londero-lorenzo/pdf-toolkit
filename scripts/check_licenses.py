@@ -1,8 +1,9 @@
 """Fail if any installed distribution is under a GPL-family licence (GPL, LGPL, AGPL).
 
-pdf-toolkit is MIT and must stay usable in closed-source products: only permissive dependencies
-(MIT, BSD, Apache-2.0, PSF, ISC, MPL-2.0 file-level) are accepted. Run with ``uv run python
-scripts/check_licenses.py`` in a fully synced environment.
+pdf-toolkit is Apache-2.0 and must stay usable in closed-source products: only permissive
+dependencies (MIT, BSD, Apache-2.0, PSF, ISC, MPL-2.0 file-level) are accepted. LGPL libraries
+used unmodified and loaded dynamically will be listed here by name when one is added (decision
+0004). Run with ``uv run python scripts/check_licenses.py`` in a fully synced environment.
 """
 
 from __future__ import annotations

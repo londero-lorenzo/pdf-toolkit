@@ -55,7 +55,7 @@ to publish documents should not stop working because of it.
 | | 1 Plan | 2 Stirling 2.14.3 | 3 PyMuPDF package | 4 PDFium in pdf-redaction | 5 Hybrid |
 |---|---|---|---|---|---|
 | Monthly limit | paid | none | none | none | halved |
-| Licence / packaging | external program | external program | AGPL, separate package outside the workspace and CI | permissive, in the MIT code | external + permissive |
+| Licence / packaging | external program | external program | AGPL, separate package outside the workspace and CI | permissive, in our own code | external + permissive |
 | True removal of text | yes (JPDFium; silent fallback to boxes, see `stirling-notes.md`) | to measure | yes | to build | as 1/2 |
 | Removal under an *area* (#15) | no: overlay only | no: overlay only | yes | to build, shared with #15 | no |
 | Regex rules | Java dialect, rules dropped silently | to measure | Python `re`, matched on extracted text | Python `re`, matched on extracted text | as 1/2 |
@@ -73,7 +73,7 @@ the editor preview (#13) and the font scan in the verdict (#7, #8) address it.
 | Issue | 1 / 2 Stirling | 3 PyMuPDF | 4 PDFium | 5 Hybrid |
 |---|---|---|---|---|
 | #5 engine without Docker | not solved | solved, as a plugin | solved, in the core | not solved |
-| #12 internal editor | no help | cannot be used by the editor (MIT core) | same code as the editor | no help |
+| #12 internal editor | no help | cannot be used by the editor (permissive core) | same code as the editor | no help |
 | #13 page rendering | - | - | already pypdfium2 | - |
 | #15 true area removal | overlay only | yes, but only inside the plugin | same page-object code | - |
 
@@ -108,10 +108,11 @@ under a box**, until the internal editor (#13 + #15) exists. Two orders are poss
 The open point of #12 stays: does a file with areas still start from a captured external edit, or
 always from the original?
 
-### Not decided here
+### Settled elsewhere
 
-- **#4, Qt:** #4 plans PySide6 (LGPL), but `scripts/check_licenses.py` and `docs/licensing.md`
-  reject LGPL too. Settle it before #13, since the editor's toolkit depends on it.
+- **#4, Qt:** #4 plans PySide6 (LGPL), which the dependency policy rejected. Settled by
+  [0004](0004-apache-2.0-licence.md): LGPL libraries are allowed when used unmodified and
+  loaded dynamically, each listed by name in `scripts/check_licenses.py`.
 
 ## Requirements for any new engine
 
