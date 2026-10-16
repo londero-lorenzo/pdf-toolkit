@@ -52,6 +52,9 @@ pdf-toolkit therefore talks only to the HTTP API of a local server.
   sends unit counts only, and only for linked instances. → Never link the instance ("Connect");
   metering is switched off in the compose template. `pdf-toolkit redact run` prints how many remote
   calls it made (one for redaction, one for sanitising, per PDF); unchanged files are skipped.
+  When the allowance is used up, every call answers `HTTP 402` until the next month. Ways out, and
+  the plan to stop depending on it: [migration guide](migration-guide.md#rolling-back-to-2143-no-usage-limit),
+  [decision 0003](decisions/0003-local-redaction-engine.md).
 - **Fonts with custom encodings and scans.** Text that cannot be extracted cannot be matched.
   → Verification warns about pages without text and pages with images: those need a visual check.
 

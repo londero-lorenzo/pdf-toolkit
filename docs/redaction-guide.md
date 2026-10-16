@@ -242,6 +242,7 @@ Exit code: `0` all OK, `2` some WARN, `1` any FAIL or error.
 | `WARN ...: LONG_NUMBER` | a weak hit: check whether it is personal. If yes add it to `terms.txt` or `aliases.csv` and `run`; if not, `review` it |
 | `ERR ...: HTTP 401` | API key missing or wrong (`api_key_file`) |
 | `ERR ...: Stirling not reachable` | Stirling is not running: `docker compose up -d`, then `redact stirling-status` |
+| `ERR ...: HTTP 402` | Stirling's monthly free allowance (1,000 units, about 2 per PDF) is used up: every PDF fails until next month. See [Rolling back to 2.14.3](migration-guide.md#rolling-back-to-2143-no-usage-limit) and [decision 0003](decisions/0003-local-redaction-engine.md) |
 | `SKIP` | convert the file to PDF or text, or leave it out: skipped files are never published |
 
 `uv run pdf-toolkit redact verify SESSION` repeats only the checks (no copy, no redaction) and

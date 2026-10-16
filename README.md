@@ -32,7 +32,7 @@ packages/pdf-fonts       font analysis: which fonts make text extraction unrelia
 packages/pdf-redaction   redaction library: rules, names, engines, verification, sessions, publishing
 apps/pdf-toolkit         the app: configuration, CLI, tkinter GUI, module registry
 docker/stirling          docker compose template for the local Stirling-PDF engine
-docs/                    architecture, privacy model, Stirling notes, licensing
+docs/                    architecture, privacy model, Stirling notes, licensing, migration guide
 ```
 
 More modules (PDF to Markdown, translation) will plug into the same shell through the
