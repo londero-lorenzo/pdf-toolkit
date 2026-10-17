@@ -28,6 +28,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from pdf_redaction.engines.base import EngineError, EngineResult
+from pdf_redaction.manual import rule_digests
 from pdf_redaction.rules.context import RedactionContext
 from pdf_redaction.rules.java_regex import to_java_patterns
 
@@ -160,6 +161,10 @@ class StirlingEngine:
                 float(self._settings.get("timeout_seconds", 300)),
             )
         return self._client
+
+    def rule_digests(self, ctx: RedactionContext) -> frozenset[str]:
+        """The patterns actually sent: an alias only adds its real value, never its replacement."""
+        return rule_digests(to_java_patterns(ctx))
 
     def redact(self, src: Path, dst: Path, ctx: RedactionContext) -> EngineResult:
         patterns = to_java_patterns(ctx)

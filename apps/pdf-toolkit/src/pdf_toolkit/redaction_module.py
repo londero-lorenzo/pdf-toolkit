@@ -59,9 +59,12 @@ def _run(args, cfg: AppConfig) -> int:
             print(f"ERR  file#{index}: {item.error}")
         else:
             verdicts.append(item.verdict)
-            print(verdict_line(item.verdict, index, item.redacted in reviewed))
+            note = svc.manual_note(item)
+            print(verdict_line(item.verdict, index, item.redacted in reviewed) + (f" [{note}]" if note else ""))
     if report.context_changed:
         print(f"note: rules changed since the last run, {report.context_changed} files were redone")
+    if manual := svc.manual_summary(report):
+        print(manual)
     print(
         f"{report.count('redacted')} redacted, {report.count('unchanged')} unchanged, "
         f"{report.count('unsupported')} unsupported, {report.count('error')} errors; "
@@ -75,10 +78,24 @@ def _verify(args, cfg: AppConfig) -> int:
     session = svc.open_session(cfg, args.session)
     verdicts = svc.verify(cfg, session)
     reviewed = session.reviewed()
+    manual = svc.manual_state(session)
     for index, v in enumerate(verdicts, 1):
-        print(verdict_line(v, index, v.rel_path in reviewed))
+        note = manual.get(v.rel_path)
+        print(verdict_line(v, index, v.rel_path in reviewed) + (f" [{note}]" if note else ""))
     print(totals(verdicts))
     return exit_code(verdicts)
+
+
+def _reset_manual(args, cfg: AppConfig) -> int:
+    session = svc.open_session(cfg, args.session)
+    paths = [p.replace("\\", "/") for p in args.paths]  # accept Windows separators
+    unknown = [p for p in paths if p not in svc.known_redacted_paths(session)]
+    if unknown:
+        print(f"{len(unknown)} path(s) not found among the redacted files (use the paths printed by 'run')")
+        return 1
+    count = svc.discard_manual(session, paths or None)
+    print(f"{count} manual edit(s) discarded: the next 'run' redoes those files from the originals")
+    return 0
 
 
 def _review(args, cfg: AppConfig) -> int:
@@ -169,6 +186,12 @@ output lines:
   SKIP / ERR                              not processed / engine error (never published)
   file#N replaces a path that still matches a rule. Matched text is never printed.
 
+manual edits: if you edit a redacted file by hand (e.g. boxes drawn in Stirling-PDF, saved
+over the file in redacted/), the next run keeps it as the base of that file and applies the
+rules on top: lines end with [manual edits kept]. It is dropped, and the file redone from the
+original, when a rule is removed or the original changes ([manual edits dropped: <reason>]);
+'reset-manual' drops it on purpose.
+
 exit codes: 0 all OK, 2 some WARN, 1 any FAIL or error
 
 examples:
@@ -194,12 +217,27 @@ examples:
 
 {GUIDE}"""
 
+RESET_MANUAL_HELP = f"""Discard manual edits: the next 'run' redoes those files from the originals.
+
+A redacted file edited by hand after a run (e.g. boxes drawn in Stirling-PDF) is kept as the
+base of that file by later runs. Use this to start over from the original instead: the copy
+of the edit kept in the workspace (manual/) is deleted.
+
+PATH is the redacted path exactly as printed by 'run'; without PATH every edit is discarded.
+exit codes: 0 done, 1 a path is not among the redacted files
+
+examples:
+  pdf-toolkit redact reset-manual invoices-2025 "ABCDEPOL-A.pdf"
+  pdf-toolkit redact reset-manual invoices-2025
+
+{GUIDE}"""
+
 PUBLISH_HELP = f"""Copy the files that are safe to share into a destination folder.
 
 Nothing is redacted here: run 'run' first. Each file is verified again with the current
 rules and copied only if OK, or WARN and reviewed. Held back: FAIL, WARN not reviewed,
-files redacted with older rules, skipped types, errors. Next to each PDF a text extract
-is written to _text/<path>.txt.
+files redacted with older rules, files edited by hand since the last run, skipped types,
+errors. Next to each PDF a text extract is written to _text/<path>.txt.
 
 The destination is the exact folder the files go into (no <ALIAS> sub-folder). Without --to
 it is the one used last time by this session; the first time, <output_root>/<ALIAS> if
@@ -271,6 +309,16 @@ def add_cli(subparsers) -> None:
     s.add_argument("paths", nargs="+", metavar="PATH", help="redacted path as printed by 'run' (one or more)")
     s.add_argument("--undo", action="store_true", help="remove the mark")
     s.set_defaults(handler=_review)
+
+    s = sub.add_parser(
+        "reset-manual",
+        help="discard manual edits: the next run redoes those files from the originals",
+        description=RESET_MANUAL_HELP,
+        formatter_class=raw,
+    )
+    s.add_argument("session", help=SESSION_ARG)
+    s.add_argument("paths", nargs="*", metavar="PATH", help="redacted path as printed by 'run' (default: every file)")
+    s.set_defaults(handler=_reset_manual)
 
     s = sub.add_parser(
         "publish", help="copy verified files to the output folder", description=PUBLISH_HELP, formatter_class=raw

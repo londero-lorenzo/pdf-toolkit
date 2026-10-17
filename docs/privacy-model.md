@@ -5,7 +5,7 @@
 | Place | Contains | Who may read it |
 |---|---|---|
 | **Source folder** | original documents + `.redaction/` (the folder context) | you only. pdf-toolkit only reads it (writes `.redaction/` when you edit the context) |
-| **Workspace** (`workspace_root/<alias>`) | copy of the originals, redacted output, ledger, review marks, name preview | you only. Must not be inside a *protected location* |
+| **Workspace** (`workspace_root/<alias>`) | copy of the originals, redacted output, ledger, review marks, name preview, manual edits (`manual/`, rules only as digests) | you only. Must not be inside a *protected location* |
 | **Output** (the publish destination: `--to FOLDER`, else `output_root/<alias>`) | verified files + text extracts | whoever you share it with |
 | **Configuration** (`%APPDATA%/pdf-toolkit/config.toml`) | paths to your global term/alias lists, API key file | you only |
 

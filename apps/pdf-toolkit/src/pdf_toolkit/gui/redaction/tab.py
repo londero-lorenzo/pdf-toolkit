@@ -75,6 +75,7 @@ class RedactionTab(ttk.Frame):
         ttk.Button(bottom, text="Open selected (visual check)", command=self.open_selected).pack(side="left")
         ttk.Button(bottom, text="Mark reviewed", command=lambda: self.mark_reviewed(True)).pack(side="left", padx=6)
         ttk.Button(bottom, text="Unmark", command=lambda: self.mark_reviewed(False)).pack(side="left")
+        ttk.Button(bottom, text="Discard manual edits", command=self.discard_manual).pack(side="left", padx=6)
         self.summary = ttk.Label(bottom, text="")
         self.summary.pack(side="right")
 
@@ -178,9 +179,11 @@ class RedactionTab(ttk.Frame):
             elif item.outcome == "error":
                 rows.append(("ERR", item.redacted, item.error))
             else:
-                rows.append(self._verdict_row(item.verdict))
+                rows.append(self._verdict_row(item.verdict, svc.manual_note(item)))
         self._fill(rows)
         note = f" | rules changed: {report.context_changed} redone" if report.context_changed else ""
+        if manual := svc.manual_summary(report):
+            note += f" | {manual}"
         self.summary.config(
             text=f"{report.count('redacted')} redacted, {report.count('unchanged')} unchanged, "
             f"remote calls {report.remote_calls}{note}"
@@ -190,10 +193,13 @@ class RedactionTab(ttk.Frame):
         if not self.session:
             return
         session = self.session
-        self._background(lambda: svc.verify(self.cfg, session), self._show_verdicts, "Verifying...")
+        self._background(
+            lambda: (svc.verify(self.cfg, session), svc.manual_state(session)), self._show_verdicts, "Verifying..."
+        )
 
-    def _show_verdicts(self, verdicts: list[FileVerdict]) -> None:
-        self._fill([self._verdict_row(v) for v in verdicts])
+    def _show_verdicts(self, result: tuple[list[FileVerdict], dict[str, str]]) -> None:
+        verdicts, manual = result
+        self._fill([self._verdict_row(v, manual.get(v.rel_path, "")) for v in verdicts])
         counts = {s: sum(1 for v in verdicts if v.status is s) for s in Status}
         self.summary.config(text=f"{counts[Status.OK]} OK, {counts[Status.WARN]} WARN, {counts[Status.FAIL]} FAIL")
 
@@ -295,9 +301,27 @@ class RedactionTab(ttk.Frame):
         for iid in self.tree.selection():
             self.tree.set(iid, "reviewed", "yes" if value else "")
 
+    def discard_manual(self, confirm: bool = True) -> None:
+        if not self.session:
+            return
+        paths = [self.tree.set(iid, "path") for iid in self.tree.selection()]
+        if not paths:
+            messagebox.showinfo("Discard manual edits", "Select the files first.", parent=self)
+            return
+        if confirm and not messagebox.askyesno(
+            "Discard manual edits",
+            f"Forget what was edited by hand in {len(paths)} selected file(s)?\n\n"
+            "The next 'Redact + verify' redoes them from the originals: boxes drawn by hand are lost.",
+            parent=self,
+        ):
+            return
+        count = svc.discard_manual(self.session, paths)
+        self.summary.config(text=f"{count} manual edit(s) discarded: run 'Redact + verify' to redo those files")
+
     # ----- helpers ----------------------------------------------------------------------------
-    def _verdict_row(self, v: FileVerdict) -> tuple[str, str, str]:
-        return (v.status.value, v.rel_path, v.summary())
+    def _verdict_row(self, v: FileVerdict, manual: str = "") -> tuple[str, str, str]:
+        details = "; ".join(d for d in (v.summary(), f"[{manual}]" if manual else "") if d)
+        return (v.status.value, v.rel_path, details)
 
     def _fill(self, rows) -> None:
         reviewed = self.session.reviewed() if self.session else set()

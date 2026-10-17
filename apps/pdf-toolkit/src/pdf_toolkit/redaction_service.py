@@ -8,8 +8,17 @@ from pathlib import Path
 
 from pdf_redaction.engines.base import Engine, load_engines
 from pdf_redaction.guards import GuardError, ensure_not_within
+from pdf_redaction.ledger import Ledger
 from pdf_redaction.names import NameRedactor
-from pdf_redaction.pipeline import RunReport, plan_names, run_session, verify_session
+from pdf_redaction.pipeline import (
+    BASE_MANUAL,
+    ItemResult,
+    RunReport,
+    discard_manual_edits,
+    plan_names,
+    run_session,
+    verify_session,
+)
 from pdf_redaction.publish import PublishReport, publish
 from pdf_redaction.rules.context import RedactionContext
 from pdf_redaction.session import SESSION_FILE, Session
@@ -90,6 +99,49 @@ def run(
 
 def verify(cfg: AppConfig, session: Session) -> list[FileVerdict]:
     return verify_session(session, load_context(cfg, session.source))
+
+
+MANUAL_KEPT = "manual edits kept"
+MANUAL_PENDING = "edited by hand: run Redact + verify to keep it"
+
+
+def manual_note(item: ItemResult) -> str:
+    """Marker for one run result: kept, dropped (with the reason) or nothing."""
+    if item.manual_dropped:
+        return f"manual edits dropped: {item.manual_dropped}"
+    return MANUAL_KEPT if item.manual else ""
+
+
+def manual_state(session: Session) -> dict[str, str]:
+    """Redacted path -> marker, for files built on a manual edit or edited since the last run."""
+    ledger = Ledger(session.ledger_path)
+    out = {}
+    for original, e in ledger.entries.items():
+        if ledger.edited_after_run(original, session.redacted_dir):
+            out[e.redacted] = MANUAL_PENDING
+        elif e.base == BASE_MANUAL:
+            out[e.redacted] = MANUAL_KEPT
+    return out
+
+
+def manual_summary(report: RunReport) -> str:
+    """One line about manual edits in a run, or "" if there were none. Counts and reasons only."""
+    parts = []
+    if report.manual_found:
+        parts.append(f"{report.manual_found} found since the last run")
+    if report.manual_rebuilt:
+        parts.append(f"{report.manual_rebuilt} files rebuilt on top of them")
+    parts += [f"{n} dropped ({reason})" for reason, n in sorted(report.manual_dropped.items())]
+    return "manual edits: " + ", ".join(parts) if parts else ""
+
+
+def known_redacted_paths(session: Session) -> set[str]:
+    return {e.redacted for e in Ledger(session.ledger_path).entries.values()}
+
+
+def discard_manual(session: Session, redacted: list[str] | None = None) -> int:
+    """Drop manual edits (of the given redacted paths, or all): the next run starts from the originals."""
+    return discard_manual_edits(session, redacted)
 
 
 def default_destination(cfg: AppConfig, session: Session) -> Path | None:
