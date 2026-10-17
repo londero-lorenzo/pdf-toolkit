@@ -32,7 +32,7 @@ packages/pdf-fonts       font analysis: which fonts make text extraction unrelia
 packages/pdf-redaction   redaction library: rules, names, engines, verification, sessions, publishing
 apps/pdf-toolkit         the app: configuration, CLI, tkinter GUI, module registry
 docker/stirling          docker compose template for the local Stirling-PDF engine
-docs/                    architecture, privacy model, Stirling notes, licensing
+docs/                    architecture, privacy model, Stirling notes, licensing, migration guide
 ```
 
 More modules (PDF to Markdown, translation) will plug into the same shell through the
@@ -96,5 +96,7 @@ documents to the repository.** See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE). Dependencies are permissive only (see [docs/licensing.md](docs/licensing.md)).
+[Apache-2.0](LICENSE), see also [NOTICE](NOTICE); versions before
+[decision 0005](docs/decisions/0005-apache-2.0-licence.md) were MIT. Dependencies are permissive
+(see [docs/licensing.md](docs/licensing.md)).
 Stirling-PDF is a separate program you run yourself; pdf-toolkit only talks to its HTTP API.

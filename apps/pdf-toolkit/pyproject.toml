@@ -3,7 +3,7 @@ name = "pdf-toolkit"
 version = "0.1.0"
 description = "Modular desktop/CLI PDF toolkit. First module: folder redaction"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = ["pdf-core", "pdf-fonts", "pdf-redaction"]
 

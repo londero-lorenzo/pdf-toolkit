@@ -42,7 +42,7 @@ source (read only) ──copy──► workspace/originals ──SafePathMapper�
 A redacted file edited by hand after a run (its SHA-256 no longer matches `ledger.csv`) is copied
 to `workspace/manual/` by the next run and becomes the engine's input for that file instead of the
 original, as long as rules were only added (`pdf_redaction.manual`, decision
-[0002](decisions/0002-manual-redactions.md)). Engines opt in with `rule_digests(ctx)`.
+[0003](decisions/0003-manual-redactions.md)). Engines opt in with `rule_digests(ctx)`.
 
 ## Rules
 

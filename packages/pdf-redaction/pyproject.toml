@@ -3,7 +3,7 @@ name = "pdf-redaction"
 version = "0.1.0"
 description = "Folder-level redaction for PDFs, text/CSV files and file names, with verification"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = ["pdf-core"]
 

@@ -1,4 +1,4 @@
-# 0002: manual edits of redacted files are the base of later runs
+# 0003: manual edits of redacted files are the base of later runs
 
 Status: accepted.
 

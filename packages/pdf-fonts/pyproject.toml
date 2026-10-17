@@ -3,7 +3,7 @@ name = "pdf-fonts"
 version = "0.1.0"
 description = "Font analysis for PDFs: which fonts a document uses and how reliably its text can be extracted"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = ["pdf-core", "pypdf>=5.1,<7", "fonttools>=4.50"]
 

@@ -8,7 +8,8 @@ personal data.
    real file, describe its *structure* (number of pages, scanned or not, fonts, producer) instead.
 2. **Keep output safe.** New messages must never contain matched values, terms or original names.
 3. **Network.** No new networking code outside `engines/stirling.py`.
-4. **Licences.** Permissive dependencies only; `uv run python scripts/check_licenses.py` must pass.
+4. **Licences.** Permissive dependencies only (LGPL only as described in `docs/licensing.md`);
+   `uv run python scripts/check_licenses.py` must pass.
 5. **Tests.** `uv run pytest` and `uv run ruff check .` must pass; add tests for new rules and engines.
 6. **Commits.** Conventional commits, in English.
 
@@ -25,4 +26,5 @@ Create a separate package that declares an entry point in `pdf_toolkit.redaction
 (an object with `name`, `version`, `suffixes`, `redact(src, dst, ctx)`) or in
 `pdf_toolkit.modules` (a `ToolkitModule`). See `docs/architecture.md`.
 
-Contributions are licensed under MIT (see `docs/licensing.md`).
+Contributions are licensed under the Apache License 2.0 (section 5 of the licence), without a CLA;
+you keep your copyright. See `docs/licensing.md`.
