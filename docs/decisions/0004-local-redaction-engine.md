@@ -1,4 +1,4 @@
-# 0003: a redaction engine that does not depend on Stirling-PDF's quota
+# 0004: a redaction engine that does not depend on Stirling-PDF's quota
 
 Status: proposed. The options are compared here; the choice is made after the evaluation below.
 
@@ -92,11 +92,11 @@ computed from character boxes. So:
   through a plugin, which would make true area removal unavailable to anyone without the AGPL
   package. Two removal implementations would have to be kept correct;
 - **Stirling** in any version helps neither: its area endpoints only add a filled rectangle
-  (`0002-manual-redactions.md`).
+  (`0003-manual-redactions.md`).
 
-### A hidden dependency of 0002
+### A hidden dependency of 0003
 
-Decision 0002 keeps manual edits as the base of later runs. Today those boxes are drawn in
+Decision 0003 keeps manual edits as the base of later runs. Today those boxes are drawn in
 Stirling's viewer. Leaving Stirling therefore also needs **another tool that truly removes content
 under a box**, until the internal editor (#13 + #15) exists. Two orders are possible:
 
@@ -111,7 +111,7 @@ always from the original?
 ### Settled elsewhere
 
 - **#4, Qt:** #4 plans PySide6 (LGPL), which the dependency policy rejected. Settled by
-  [0004](0004-apache-2.0-licence.md): LGPL libraries are allowed when used unmodified and
+  [0005](0005-apache-2.0-licence.md): LGPL libraries are allowed when used unmodified and
   loaded dynamically, each listed by name in `scripts/check_licenses.py`.
 
 ## Requirements for any new engine
@@ -172,7 +172,7 @@ The fixes belong before, or together with, the engine switch, since the switch r
 
 "Verify again" is read-only: it cannot change what a run keeps. Likely causes:
 
-- **First run after updating pdf-toolkit.** Ledgers written before 0002 have no `output_sha256`, so
+- **First run after updating pdf-toolkit.** Ledgers written before 0003 have no `output_sha256`, so
   an edit is not recognised; the run then records the hash of the file *as it is*, edit included,
   as if the engine had written it. (A recognised edit whose rules are not in `rulesets.json` is
   dropped as `rules removed`.) From the second run on, edits are kept: it looks as if the extra step

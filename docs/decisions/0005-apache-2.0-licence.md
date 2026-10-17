@@ -1,4 +1,4 @@
-# 0004: Apache-2.0 licence
+# 0005: Apache-2.0 licence
 
 Status: accepted.
 
@@ -70,7 +70,7 @@ copyright.
   loaded dynamically, so that the user can replace them. Each one is listed by name in
   `scripts/check_licenses.py`, with the reason, when it is added; any other LGPL distribution still
   fails the check. A frozen build keeps them as separate, replaceable files and ships their licence
-  text. The first expected entry is PySide6 for #4: this settles the point left open in 0003.
+  text. The first expected entry is PySide6 for #4: this settles the point left open in 0004.
 
 ## Follow-up
 

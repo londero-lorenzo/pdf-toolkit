@@ -1,7 +1,7 @@
 # Licensing
 
 pdf-toolkit is released under the [Apache License 2.0](../LICENSE); see also [NOTICE](../NOTICE).
-Versions published before [decision 0004](decisions/0004-apache-2.0-licence.md) were under MIT,
+Versions published before [decision 0005](decisions/0005-apache-2.0-licence.md) were under MIT,
 and whoever received them keeps those rights.
 
 ## Dependency policy
@@ -40,7 +40,7 @@ are not part of this repository's code.
 
 What is needed to redact correctly and to check the result (engines, true removal of content,
 `verify`, the gates of `publish`) is part of this repository, not of an optional package. See
-[decision 0004](decisions/0004-apache-2.0-licence.md).
+[decision 0005](decisions/0005-apache-2.0-licence.md).
 
 ## Contributions
 

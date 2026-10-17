@@ -18,7 +18,7 @@ Public Apache-2.0 repository. Language: **English** for code, comments, docs, co
   and only towards loopback addresses (`tests/test_network_boundary.py` enforces it).
 - `pdf-core` never modifies a PDF.
 - Dependencies: permissive licences only (`scripts/check_licenses.py`); LGPL only when listed by
-  name there (`docs/decisions/0004-apache-2.0-licence.md`). GPL and AGPL libraries go in
+  name there (`docs/decisions/0005-apache-2.0-licence.md`). GPL and AGPL libraries go in
   separate optional packages that use the entry points.
 - Regexes in `rules/` must work in both Python and Java (they are sent to Stirling-PDF).
 

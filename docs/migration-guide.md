@@ -6,7 +6,7 @@ redacted twice by hand or published unchecked. Three kinds of change:
 1. [a new version of pdf-toolkit](#1-updating-pdf-toolkit);
 2. [a new (or older) version of Stirling-PDF](#2-changing-the-stirling-pdf-version);
 3. [a different redaction engine](#3-switching-to-another-engine), for example a local one that
-   does not need Stirling (see [decision 0003](decisions/0003-local-redaction-engine.md)).
+   does not need Stirling (see [decision 0004](decisions/0004-local-redaction-engine.md)).
 
 All three end with the same [checks](#4-checks-after-any-migration). Try every migration on
 synthetic documents first (`scripts/make_demo_folder.py`), never on a real folder.
@@ -43,7 +43,7 @@ uv run pdf-toolkit redact run SESSION
 ```
 
 Why: a newer version may record more about each file. Sessions run before manual edits were kept
-(decision 0002) have no `output_sha256` and no `rulesets.json`, so an edit saved *before* that first
+(decision 0003) have no `output_sha256` and no `rulesets.json`, so an edit saved *before* that first
 run cannot be told apart from the engine's output: the run records the file as it is, and the boxes
 are lost the next time the file is redone. After one run both are recorded, and edits from then on
 are kept. If you already drew boxes on a
@@ -66,7 +66,7 @@ Stirling's version, so without `--force` already redacted files are kept as they
 Stirling 3.x meters the API: 1,000 units a month, about 2 per PDF. When they are used up, every PDF
 ends with `ERR ...: HTTP 402` and nothing can be published until the next month. 2.14.3 is the last
 release without metering. It is a stopgap (an old release, without fixes), not the long-term answer:
-see [decision 0003](decisions/0003-local-redaction-engine.md).
+see [decision 0004](decisions/0004-local-redaction-engine.md).
 
 1. Stop the container: `docker compose down` in the folder of your compose file.
 2. Version 3.x migrated the database in `configs/`, and 2.14.3 cannot read it:
@@ -108,7 +108,7 @@ What happens on the first `run` after the switch:
 - **Every file is redone**, without `--force`: the engine `name/version` in the ledger no longer
   matches. With a local engine the run prints `remote engine calls: 0`.
 - **Manual edits** are kept only if the new engine implements `rule_digests` on the same rules as
-  the old one (see the requirements in decision 0003). Otherwise the line says
+  the old one (see the requirements in decision 0004). Otherwise the line says
   `[manual edits dropped: rules removed]` or `[manual edits dropped: engine cannot rebuild on top of it]`.
   The edits stay in `manual/`, so you can see where the boxes were and draw them again.
 - **Review marks** no longer apply to rebuilt files: they hold the hash of the file you looked at.

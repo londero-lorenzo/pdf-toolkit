@@ -97,6 +97,6 @@ documents to the repository.** See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [Apache-2.0](LICENSE), see also [NOTICE](NOTICE); versions before
-[decision 0004](docs/decisions/0004-apache-2.0-licence.md) were MIT. Dependencies are permissive
+[decision 0005](docs/decisions/0005-apache-2.0-licence.md) were MIT. Dependencies are permissive
 (see [docs/licensing.md](docs/licensing.md)).
 Stirling-PDF is a separate program you run yourself; pdf-toolkit only talks to its HTTP API.

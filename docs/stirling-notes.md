@@ -25,7 +25,7 @@ pdf-toolkit therefore talks only to the HTTP API of a local server.
 | `POST /api/v1/security/auto-redact` | default engine | Uses JPDFium (MIT, PDFium-based) with `removeContent(true)` and `redactMetadata(true)` ([`RedactController.java` L212-229](https://github.com/Stirling-Tools/Stirling-PDF/blob/v3.1.0/app/core/src/main/java/stirling/software/SPDF/controller/api/security/RedactController.java#L212-L229)). One regex per line in `listOfText`. |
 | `POST /api/v1/security/redact-execute` | alternative (`endpoint = "redact-execute"`) | Separate exact strings and regexes, page wipes, `redactImagePages` ([`RedactExecuteRequest.java`](https://github.com/Stirling-Tools/Stirling-PDF/blob/v3.1.0/app/core/src/main/java/stirling/software/SPDF/model/api/security/RedactExecuteRequest.java)). |
 | `POST /api/v1/security/sanitize-pdf` | after redaction | JavaScript, embedded files, XMP, metadata, links removed. |
-| `POST /api/v1/security/redact` and `imageBoxes` of `redact-execute` | **not used** | Areas by coordinates. They only **append a filled rectangle** to the page: the text, images and paths underneath stay in the file ([`ManualRedactionService.java`](https://github.com/Stirling-Tools/Stirling-PDF/blob/v3.1.0/app/core/src/main/java/stirling/software/SPDF/controller/api/security/ManualRedactionService.java) `redactAreas`, `redactImageBoxes`), unless the whole document is rasterised (`convertPDFToImage`). Not a way to replay manual boxes: see `docs/decisions/0002-manual-redactions.md`. |
+| `POST /api/v1/security/redact` and `imageBoxes` of `redact-execute` | **not used** | Areas by coordinates. They only **append a filled rectangle** to the page: the text, images and paths underneath stay in the file ([`ManualRedactionService.java`](https://github.com/Stirling-Tools/Stirling-PDF/blob/v3.1.0/app/core/src/main/java/stirling/software/SPDF/controller/api/security/ManualRedactionService.java) `redactAreas`, `redactImageBoxes`), unless the whole document is rasterised (`convertPDFToImage`). Not a way to replay manual boxes: see `docs/decisions/0003-manual-redactions.md`. |
 | `GET /api/v1/info/status` | `pdf-toolkit redact stirling-status` | Version and health. |
 
 ## Pitfalls and how pdf-toolkit handles them
@@ -54,7 +54,7 @@ pdf-toolkit therefore talks only to the HTTP API of a local server.
   calls it made (one for redaction, one for sanitising, per PDF); unchanged files are skipped.
   When the allowance is used up, every call answers `HTTP 402` until the next month. Ways out, and
   the plan to stop depending on it: [migration guide](migration-guide.md#rolling-back-to-2143-no-usage-limit),
-  [decision 0003](decisions/0003-local-redaction-engine.md).
+  [decision 0004](decisions/0004-local-redaction-engine.md).
 - **Fonts with custom encodings and scans.** Text that cannot be extracted cannot be matched.
   → Verification warns about pages without text and pages with images: those need a visual check.
 
