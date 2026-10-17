@@ -52,17 +52,17 @@ to publish documents should not stop working because of it.
 
 ## Criteria
 
-| | 1 Plan | 2 Stirling 2.14.3 | 3 PyMuPDF package | 4 PDFium in pdf-redaction | 5 Hybrid |
-|---|---|---|---|---|---|
-| Monthly limit | paid | none | none | none | halved |
-| Licence / packaging | external program | external program | AGPL, separate package outside the workspace and CI | permissive, in our own code | external + permissive |
-| True removal of text | yes (JPDFium; silent fallback to boxes, see `stirling-notes.md`) | to measure | yes | to build | as 1/2 |
-| Removal under an *area* (#15) | no: overlay only | no: overlay only | yes | to build, shared with #15 | no |
-| Regex rules | Java dialect, rules dropped silently | to measure | Python `re`, matched on extracted text | Python `re`, matched on extracted text | as 1/2 |
-| Sanitise equivalent | `sanitize-pdf` | `sanitize-pdf` | `scrub()` | pypdf | pypdf |
-| Docker needed | yes | yes | no | no | yes |
-| Effort | none | small | medium | large | small |
-| Maintenance | follows weekly releases | none, but ageing | follows PyMuPDF | ours | both |
+|                               | 1 Plan                                                           | 2 Stirling 2.14.3 | 3 PyMuPDF package                                   | 4 PDFium in pdf-redaction              | 5 Hybrid              |
+| ----------------------------- | ---------------------------------------------------------------- | ----------------- | --------------------------------------------------- | -------------------------------------- | --------------------- |
+| Monthly limit                 | paid                                                             | none              | none                                                | none                                   | halved                |
+| Licence / packaging           | external program                                                 | external program  | AGPL, separate package outside the workspace and CI | permissive, in our own code            | external + permissive |
+| True removal of text          | yes (JPDFium; silent fallback to boxes, see `stirling-notes.md`) | to measure        | yes                                                 | to build                               | as 1/2                |
+| Removal under an *area* (#15) | no: overlay only                                                 | no: overlay only  | yes                                                 | to build, shared with #15              | no                    |
+| Regex rules                   | Java dialect, rules dropped silently                             | to measure        | Python `re`, matched on extracted text              | Python `re`, matched on extracted text | as 1/2                |
+| Sanitise equivalent           | `sanitize-pdf`                                                   | `sanitize-pdf`    | `scrub()`                                           | pypdf                                  | pypdf                 |
+| Docker needed                 | yes                                                              | yes               | no                                                  | no                                     | yes                   |
+| Effort                        | none                                                             | small             | medium                                              | large                                  | small                 |
+| Maintenance                   | follows weekly releases                                          | none, but ageing  | follows PyMuPDF                                     | ours                                   | both                  |
 
 Every option matches on **extracted text**: a font without a Unicode map (#7) is neither redacted
 nor found by `verify` with any of them. This is a limit to report, not a difference between options;
