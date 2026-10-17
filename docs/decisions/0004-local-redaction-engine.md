@@ -1,6 +1,7 @@
 # 0004: a redaction engine that does not depend on Stirling-PDF's quota
 
-Status: proposed. The options are compared here; the choice is made after the evaluation below.
+Status: proposed. The direction is chosen (see Decision); the engine option is confirmed after the
+evaluation below.
 
 ## Context
 
@@ -150,7 +151,41 @@ A spike per remaining option (3 and 4; 5 as a by-product of 4), on synthetic doc
 
 ## Decision
 
-Open, until the evaluation is done. Meanwhile:
+### Direction: a local engine with the internal editor, and nothing written before publish
+
+The engine is rebuilt inside pdf-toolkit together with the internal editor (#12), on the shared
+page-object code. Option 4 is the expected choice; the evaluation confirms that it is feasible
+(partial text runs above all) or falls back to option 3.
+
+The session changes model:
+
+- **Rules and areas are data held in memory.** A run, a new term or a new area updates an
+  in-memory result, shown as a **preview** of what will be removed. No file is written under
+  `redacted/` while working.
+- **Every file starts from the original.** There is no captured external edit to rebuild on: what
+  was drawn by hand in another viewer is drawn as an area instead. This answers the open point of
+  #12.
+- **Publish does the real work once**: true removal of rule matches and areas, sanitising, the
+  checks of `verify` and per-area validation (#15), then the copy to the destination. Rules,
+  aliases and areas are saved to `.redaction/` only then.
+
+Why: editing stays instant and reversible, later changes never start from a rewritten file, and
+the problems found in use below that come from files changing on disk (manual edits, review marks)
+disappear instead of being patched.
+
+Consequences:
+
+- Decision 0003 (manual edits as the base of later runs) applies to the Stirling engine only, and
+  ends with it. Sessions that hold manual edits need a migration path: publish them as they are, or
+  redraw them as areas; the migration guide describes it with the switch.
+- Review marks are tied to the original's hash and the fingerprint of its rules and areas, not to
+  an output file.
+- The cost of `verify` moves to publish, so the verdict cache below keys on the same inputs.
+- Open points, for #12 and the evaluation: how much of the in-memory result is kept for a large
+  folder (pages rendered on demand, results cached on disk outside the source), and what the
+  preview checks before publish.
+
+### Until the switch
 
 - Stirling stays pinned (`docker/stirling/docker-compose.yml`) and is upgraded only with the
   checklist in `stirling-notes.md`. Option 2 is the documented way out when the allowance runs out.
@@ -183,6 +218,7 @@ The fixes belong before, or together with, the engine switch, since the switch r
 Fixes: a version number for the workspace files, with an explicit migration when a session is
 opened (and a message saying what it did, as in the migration guide); refresh the manual state when
 the window gets focus back, by size and mtime first, so a saved edit shows up without a verify.
+Not planned: the new model (see Decision) removes external edits altogether.
 
 ### "Verify again" removes some "Reviewed" marks
 
@@ -193,7 +229,8 @@ file. Also, "Mark reviewed" is not disabled while a job runs, so a mark can be t
 is about to be rewritten, and the table shows "yes" until the next refresh.
 
 Fixes: disable the review buttons during jobs; tie the mark to the output recorded in the ledger
-and say why a mark no longer applies (`edited after review`, `rebuilt by a run`).
+and say why a mark no longer applies (`edited after review`, `rebuilt by a run`). Not planned: in
+the new model a mark is tied to the original and to its rules and areas (see Decision).
 
 ### Verification is repeated when nothing changed
 
@@ -201,7 +238,8 @@ and say why a mark no longer applies (`edited after review`, `rebuilt by a run`)
 and `publish` all verify every file again.
 
 Fix: store verdicts keyed by (output SHA-256, context fingerprint, redacted path, verify version,
-backend versions), checked cheaply by size and mtime first. Used by opening a session, "Verify
+backend versions), checked cheaply by size and mtime first. In the new model the key is the
+original's SHA-256 and the fingerprint of its rules and areas instead of the output. Used by opening a session, "Verify
 again" and unchanged files in `run`; also by `redact status` (#3). `publish` keeps a full check:
 it is the last gate.
 
@@ -218,5 +256,6 @@ thread; a process pool for verification (pypdf is pure Python: threads gain litt
 
 - Phase 0 as a small `fix:` change.
 - The evaluation spikes, then this record moves to *accepted* with the chosen option.
-- The fixes above, each as its own issue.
+- The verdict cache and the loading fixes as their own issue; the manual edit and review mark fixes
+  are left to the new model.
 - `docs/migration-guide.md` gets the concrete steps of the chosen engine.
