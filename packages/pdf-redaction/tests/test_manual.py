@@ -55,12 +55,14 @@ def test_adding_a_term_keeps_the_manual_edit(session, source, engine):
     run(session, source, engine)
     edit_by_hand(session.redacted_dir / STATEMENT)
     write_terms(context_dir(source) / "terms.txt", [PERSON, "Holder"])
+    before = len(engine.sources)
     report = run(session, source, engine)
     text = extract_text(session.redacted_dir / STATEMENT)
     assert BOX in text and VALUE not in text and "Holder" not in text
     assert report.manual_found == 1 and report.manual_rebuilt == 1
     assert item(report).manual and item(report).outcome == "redacted"
-    assert engine.sources[-1] == ManualStore(session).file_for(item(report).original)
+    # files run in parallel, so look for the manual copy among this run's sources, not at the end
+    assert ManualStore(session).file_for(item(report).original) in engine.sources[before:]
     # repeatable: the next run with the same rules leaves it alone and still reports it as manual
     again = run(session, source, engine)
     assert item(again).outcome == "unchanged" and item(again).manual and again.manual_found == 0
